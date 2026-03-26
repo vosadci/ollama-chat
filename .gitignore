@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Flutter/Dart
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.g.dart
+*.freezed.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# RAG data and vector store (exclude production data, keep sample)
+backend/data/*
+!backend/data/sample/
+backend/chroma_db/
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
