@@ -85,20 +85,20 @@ flutter test -v     # verbose
 
 All widget tests are fully offline — `ChatService` is replaced with a `MockChatService` (via `mocktail`).
 
-### End-to-end tests (Chrome, real backend)
+### End-to-end tests (desktop window, real backend)
 
-Drives the real app in Chrome with actual taps, receives real Ollama responses.
-Runs on macOS and Linux. A Chrome window opens; you can watch the tests drive it.
-For headless use, set `CHROME_FLAGS=--headless` or prefix with `xvfb-run`.
+Drives the real app in a native desktop window with actual taps, receives real Ollama responses.
+Runs on macOS and Linux. Web targets are not supported by the `integration_test` package.
 
 ```bash
 # Requires backend running:
 cd ../backend && .venv/bin/python main.py
 
-# Run E2E tests (opens Chrome):
-flutter test integration_test/ -d chrome
+# Run E2E tests:
+flutter test integration_test/ -d macos   # macOS
+flutter test integration_test/ -d linux   # Linux (requires display server)
 
-# Or from repo root:
+# Or from repo root (auto-detects OS):
 make e2e
 ```
 

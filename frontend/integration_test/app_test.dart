@@ -7,10 +7,11 @@
 /// Run:
 ///   make e2e
 ///   # or directly:
-///   flutter test integration_test/ -d chrome
+///   flutter test integration_test/ -d macos    # macOS
+///   flutter test integration_test/ -d linux    # Linux (requires display server)
 ///
-/// Chrome opens with the app running; you can watch the tests drive it.
-/// For headless use: set CHROME_FLAGS=--headless or prefix with xvfb-run.
+/// A native desktop window opens; you can watch the app as tests drive it.
+/// (Web targets are not supported by the integration_test package.)
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';

@@ -1,5 +1,12 @@
 .PHONY: help setup run stop logs build dev dev-web test test-backend test-frontend e2e clean
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    FLUTTER_DESKTOP := macos
+else
+    FLUTTER_DESKTOP := linux
+endif
+
 help:
 	@echo "Ollama Chat — Developer Commands"
 	@echo ""
@@ -15,7 +22,7 @@ help:
 	@echo "  make test           Run all tests (backend + frontend)"
 	@echo "  make test-backend   Run backend tests only (offline, ~1s)"
 	@echo "  make test-frontend  Run Flutter widget tests only (offline, ~3s)"
-	@echo "  make e2e            Run end-to-end tests in Chrome (requires backend running)"
+	@echo "  make e2e            Run end-to-end tests in a desktop window (requires backend running)"
 	@echo ""
 	@echo "  make clean          Remove containers and local images"
 
@@ -61,8 +68,8 @@ test-frontend:
 	cd frontend && flutter test
 
 e2e:
-	@echo "Running E2E tests in Chrome (backend must be running on :8000)..."
-	cd frontend && flutter test integration_test/ -d chrome
+	@echo "Running E2E tests in desktop window (backend must be running on :8000)..."
+	cd frontend && flutter test integration_test/ -d $(FLUTTER_DESKTOP)
 
 clean:
 	docker compose down --rmi local
