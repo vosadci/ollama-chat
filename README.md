@@ -1,6 +1,6 @@
 # Ollama Chat
 
-![CI](https://github.com/USERNAME/ollama-chat/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/vosadci/ollama-chat/actions/workflows/ci.yml/badge.svg)
 
 A local RAG-powered chat app — Flutter frontend + FastAPI backend with local LLM inference via [Ollama](https://ollama.com) and a hybrid retrieval pipeline over your own HTML documents.
 
