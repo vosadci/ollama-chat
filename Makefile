@@ -15,7 +15,7 @@ help:
 	@echo "  make test           Run all tests (backend + frontend)"
 	@echo "  make test-backend   Run backend tests only (offline, ~1s)"
 	@echo "  make test-frontend  Run Flutter widget tests only (offline, ~3s)"
-	@echo "  make e2e            Run end-to-end tests in macOS window (requires backend running)"
+	@echo "  make e2e            Run end-to-end tests in Chrome (requires backend running)"
 	@echo ""
 	@echo "  make clean          Remove containers and local images"
 
@@ -61,8 +61,8 @@ test-frontend:
 	cd frontend && flutter test
 
 e2e:
-	@echo "Running E2E tests in macOS window (backend must be running on :8000)..."
-	cd frontend && flutter test integration_test/ -d macos
+	@echo "Running E2E tests in Chrome (backend must be running on :8000)..."
+	cd frontend && flutter test integration_test/ -d chrome
 
 clean:
 	docker compose down --rmi local

@@ -5,10 +5,12 @@
 ///   2. cd backend && .venv/bin/python main.py
 ///
 /// Run:
-///   flutter test integration_test/ -d macos
+///   make e2e
+///   # or directly:
+///   flutter test integration_test/ -d chrome
 ///
-/// A native macOS window opens; you can watch the app as tests drive it.
-/// (Web devices are not supported by integration_test.)
+/// Chrome opens with the app running; you can watch the tests drive it.
+/// For headless use: set CHROME_FLAGS=--headless or prefix with xvfb-run.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';

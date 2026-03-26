@@ -78,10 +78,10 @@ make test-backend   # 60 backend tests: RAG pipeline + API endpoints
 make test-frontend  # 50 Flutter widget tests: model, widgets, ChatScreen flows
 ```
 
-End-to-end tests drive the real app in a visible macOS window against the live backend:
+End-to-end tests drive the real app in Chrome against the live backend:
 ```bash
 make dev &          # start backend
-make e2e            # opens macOS window, runs 7 full-stack scenarios
+make e2e            # opens Chrome, runs 7 full-stack scenarios
 ```
 
 ## Configuration
