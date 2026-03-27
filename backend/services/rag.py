@@ -461,5 +461,5 @@ class RAGService:
             return texts, metadatas
 
         except Exception as exc:
-            logger.warning("RAG retrieval failed: %s", exc)
+            logger.warning("RAG retrieval failed: %s", exc, exc_info=True)
             return [], []
