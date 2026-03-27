@@ -10,11 +10,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from middleware.request_id import RequestIDMiddleware
+from middleware.request_id import RequestIDFilter, RequestIDMiddleware
 from routers.chat import router as chat_router
 from services.rag import RAGService
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s",
+)
+logging.getLogger().addFilter(RequestIDFilter())
 logger = logging.getLogger(__name__)
 
 
