@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     model: str = "llama3.1:8b"
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 — intentional: containerised service binds all interfaces
     port: int = 8000
     # Comma-separated list of allowed CORS origins.
     # Use "*" only for fully local/private deployments.

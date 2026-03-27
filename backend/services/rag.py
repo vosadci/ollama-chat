@@ -283,7 +283,7 @@ class _BM25Index:
             return False
         try:
             with path.open("rb") as fh:
-                data = pickle.load(fh)
+                data = pickle.load(fh)  # nosec B301 — file is written by this process, never from user input
             self._bm25 = data["bm25"]
             self._ids = data["ids"]
             logger.info("BM25 index loaded from cache (%d chunks).", len(self._ids))
