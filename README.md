@@ -45,10 +45,11 @@ The app comes with sample HTML documents in `backend/data/sample/` so it works o
 | `make build` | Rebuild images without cache |
 | `make dev` | Run backend natively with hot reload |
 | `make dev-web` | Run Flutter web in Chrome (hot reload, connects to local backend) |
-| `make test` | Run all tests — backend (60) + frontend (50) |
-| `make test-backend` | Backend tests only — fully offline, ~1s |
+| `make test` | Run all tests — backend unit (65) + frontend (50+) |
+| `make test-backend` | Backend unit tests only — fully offline, ~1s |
 | `make test-frontend` | Flutter widget tests only — fully offline, ~3s |
 | `make e2e` | End-to-end tests in visible macOS window against the live backend |
+| `make lock` | Regenerate `backend/requirements.lock` via pip-compile |
 | `make clean` | Remove containers and local images |
 
 ## Development Workflow
@@ -73,9 +74,15 @@ cd frontend && flutter run -d "iPhone 17 Pro Max" --no-enable-impeller
 ## Testing
 
 ```bash
-make test           # all 110 tests (offline, ~5s)
-make test-backend   # 60 backend tests: RAG pipeline + API endpoints
-make test-frontend  # 50 Flutter widget tests: model, widgets, ChatScreen flows
+make test           # all offline tests (backend unit + Flutter widgets, ~5s)
+make test-backend   # 65 backend unit tests: RAG pipeline, API, middleware
+                    # +12 integration tests (auto-skipped unless OLLAMA_URL is set)
+make test-frontend  # Flutter widget tests: model, widgets, ChatScreen flows
+```
+
+To run the integration tests against a live Ollama instance:
+```bash
+OLLAMA_URL=http://localhost:11434 make test-backend
 ```
 
 End-to-end tests drive the real app in a desktop window against the live backend:
@@ -94,8 +101,9 @@ Copy `.env.example` to `.env` (done automatically by `make setup`) and adjust as
 | `MODEL` | `llama3.1:8b` | Chat model |
 | `EMBED_MODEL` | `nomic-embed-text` | Embedding model |
 | `DATA_PATH` | `./data/sample` | Directory of HTML files to index |
+| `CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated allowed origins |
 
-See [backend/README.md](backend/README.md) for the full variable reference.
+See [backend/README.md](backend/README.md) for the full variable reference, including all RAG tuning parameters.
 
 ## Using Your Own Data
 
@@ -109,3 +117,5 @@ The RAG pipeline extracts text from `<body>`, strips navigation/footer boilerpla
 
 - [backend/README.md](backend/README.md) — API reference, RAG pipeline, backend setup
 - [frontend/README.md](frontend/README.md) — Flutter setup, builds, configuration
+- [docs/rag-hyperparameter-tuning.md](docs/rag-hyperparameter-tuning.md) — RAG parameter guide, profiles, and diagnostics
+- [docs/adr/](docs/adr/) — Architecture Decision Records (ChromaDB, hybrid retrieval, Flutter)

@@ -9,6 +9,8 @@ FastAPI backend for Ollama Chat. Provides a streaming chat API powered by a loca
 - **ChromaDB** — persistent vector store for semantic search
 - **BM25 + RRF fusion** — hybrid keyword + semantic retrieval
 - **MMR reranking** — diversity-aware result reranking
+- **`RAGService`** — encapsulates all retrieval state; instantiated once at startup via FastAPI lifespan and injected into routes via `dependencies.py`
+- **`RequestIDMiddleware`** — attaches an `X-Request-ID` correlation header to every request and response
 
 ## Prerequisites
 
@@ -53,10 +55,17 @@ All settings are in [config.py](config.py) and can be overridden via environment
 | `EMBED_MODEL` | `nomic-embed-text` | Embedding model |
 | `HOST` | `0.0.0.0` | Server bind host |
 | `PORT` | `8000` | Server port |
+| `CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated allowed CORS origins |
 | `DATA_PATH` | `./data/sample` | Directory of HTML files to index |
 | `CHROMA_PATH` | `./chroma_db` | ChromaDB persistence directory |
-| `RAG_TOP_K` | `5` | Number of chunks returned per query |
+| `RAG_TOP_K` | `5` | Final number of chunks sent to the LLM |
+| `RAG_SEMANTIC_CANDIDATES` | `15` | ChromaDB candidates before RRF fusion |
+| `RAG_BM25_CANDIDATES` | `15` | BM25 candidates before RRF fusion |
 | `RAG_MMR_LAMBDA` | `0.7` | MMR relevance/diversity balance (0–1) |
+| `RAG_CHUNK_SIZE` | `800` | Maximum characters per indexed chunk |
+| `RAG_CHUNK_OVERLAP` | `80` | Characters of overlap between adjacent chunks |
+
+See [../docs/rag-hyperparameter-tuning.md](../docs/rag-hyperparameter-tuning.md) for tuning guidance, recommended profiles, and diagnostics.
 
 ## Running Locally
 
@@ -109,15 +118,22 @@ Streams a chat response as Server-Sent Events.
 
 ```bash
 source .venv/bin/activate
-pytest           # all 60 tests
+pytest           # 65 unit tests (offline) + 12 integration tests (skipped by default)
 pytest -v        # verbose output
 ```
 
-All tests are fully offline — no Ollama, no ChromaDB, no running server required.
+Unit tests are fully offline — no Ollama, no ChromaDB, no running server required.
 
 | File | What it tests |
 |---|---|
 | `tests/test_rag.py` | RAG pipeline: HTML extraction, chunking, BM25, RRF, MMR (37 tests) |
-| `tests/test_api.py` | API endpoints: SSE stream structure, input validation, error handling, OpenAPI schema (23 tests) |
+| `tests/test_api.py` | API endpoints: SSE stream, input validation, error handling, OpenAPI schema, X-Request-ID middleware (28 tests) |
+| `tests/test_integration.py` | Full-stack: health, live SSE chat, RAG retrieve, multi-turn (13 tests — skipped unless `OLLAMA_URL` is set) |
 
-API tests use `httpx.AsyncClient` with `ASGITransport` — the app is tested in-process without starting a server. External dependencies (Ollama, ChromaDB) are mocked.
+API tests use `httpx.AsyncClient` with `ASGITransport` — the app is tested in-process without starting a server. External dependencies (Ollama, ChromaDB) are mocked via `app.dependency_overrides`.
+
+To run integration tests against a live Ollama instance:
+
+```bash
+OLLAMA_URL=http://localhost:11434 pytest tests/test_integration.py -v
+```

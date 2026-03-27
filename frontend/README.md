@@ -77,11 +77,12 @@ flutter test -v     # verbose
 
 | File | What it covers |
 |---|---|
-| `test/models/message_test.dart` | `ChatMessage` model — 10 tests |
+| `test/models/message_test.dart` | `ChatMessage` model, immutability, `copyWith` — 10 tests |
+| `test/services/chat_service_test.dart` | SSE token delivery, cancellation, error paths — 16 tests |
 | `test/widgets/input_bar_test.dart` | Send/stop states, keyboard shortcut — 9 tests |
 | `test/widgets/message_bubble_test.dart` | Streaming, markdown, source chips — 9 tests |
 | `test/widget_test.dart` | Empty state, suggested chip labels — 5 tests |
-| `test/widgets/chat_screen_test.dart` | Send/receive flow, error handling, clear dialog, stop — 17 tests |
+| `test/widgets/chat_screen_test.dart` | Send/receive flow, error handling, clear dialog, stop, custom suggestions — 19 tests |
 
 All widget tests are fully offline — `ChatService` is replaced with a `MockChatService` (via `mocktail`).
 
@@ -117,19 +118,22 @@ make e2e
 ```
 lib/
   main.dart                  # App entry point, theme setup
+  config/
+    app_config.dart          # Compile-time configuration (SUGGESTION_CHIPS, defaults)
   models/
-    message.dart             # ChatMessage model
+    message.dart             # ChatMessage model (immutable, copyWith)
   services/
-    chat_service.dart        # Backend API client (SSE streaming)
+    chat_service.dart        # Backend API client (SSE streaming, clientFactory injection)
   utils/
     url_launcher_helper.dart # Platform-aware URL opening (web vs mobile)
   widgets/
     chat_screen.dart         # Main screen: message list, send bar, empty state
-    message_bubble.dart      # Individual message bubbles with Markdown + sources
-    input_bar.dart           # Text input with send/stop toggle
-    typing_indicator.dart    # Animated dots shown while streaming
+    message_bubble.dart      # Individual message bubbles with Markdown, sources, Semantics
+    input_bar.dart           # Text input with send/stop toggle, tooltips
+    typing_indicator.dart    # Animated dots with live-region Semantics for screen readers
 test/
   models/                    # Model unit tests
+  services/                  # ChatService unit tests (SSE, cancellation, error paths)
   widgets/                   # Widget + ChatScreen functional tests
 integration_test/
   app_test.dart              # E2E tests (visible macOS window, real backend)
@@ -159,3 +163,11 @@ flutter run --dart-define=SOURCE_BASE_URL=https://yourdomain.com
 ```
 
 If not set, source chips are shown as plain labels.
+
+The suggestion chips shown on the empty-state screen are configurable without recompiling:
+
+```bash
+flutter run --dart-define=SUGGESTION_CHIPS="What can you help me with?|Tell me about the product.|How do I get started?"
+```
+
+Pipe (`|`) is the delimiter. If the define is absent, the default chips from `lib/config/app_config.dart` are used.
