@@ -11,10 +11,14 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-# Directories to exclude from indexing (language mirrors, asset dirs)
-_EXCLUDED_DIRS = frozenset([
-    "en", "ru", "language", "themes", "plugins", "modules", "storage", "combine"
-])
+
+def _get_excluded_dirs() -> frozenset[str]:
+    """Parse DATA_EXCLUDED_DIRS from settings into a frozenset.
+
+    Evaluated lazily so that test overrides applied after import take effect.
+    """
+    raw = settings.data_excluded_dirs
+    return frozenset(d.strip() for d in raw.split(",") if d.strip())
 
 
 # ---------------------------------------------------------------------------
@@ -134,10 +138,11 @@ def chunk_text(
 
 
 def get_html_files(data_path: Path) -> list[Path]:
+    excluded = _get_excluded_dirs()
     files = []
     for path in data_path.rglob("*.html"):
         parts = set(path.relative_to(data_path).parts[:-1])
-        if parts & _EXCLUDED_DIRS:
+        if parts & excluded:
             continue
         files.append(path)
     return files

@@ -23,16 +23,8 @@ async def stream_chat(
     """
     if context_chunks:
         context = "\n\n---\n\n".join(context_chunks)
-        system_msg = {
-            "role": "system",
-            "content": (
-                "You are a helpful assistant. Answer ONLY based on the information provided below. "
-                "If the answer is not in the provided information, say you don't have that information. "
-                "Do not use general knowledge. Do not make up information.\n\n"
-                f"DOCUMENTS:\n{context}"
-            ),
-        }
-        messages = [system_msg, *messages]
+        system_content = settings.system_prompt.format(context=context)
+        messages = [{"role": "system", "content": system_content}, *messages]
 
     payload = {
         "model": settings.model,
