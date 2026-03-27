@@ -24,8 +24,8 @@ help:
 	@echo "  make test-frontend  Run Flutter widget tests only (offline, ~3s)"
 	@echo "  make e2e            Run end-to-end tests in a desktop window (requires backend running)"
 	@echo ""
-	@echo "  make clean          Remove containers and local images
-  make lock           Regenerate backend/requirements.lock via pip-compile"
+	@echo "  make clean          Remove containers and local images"
+	@echo "  make lock           Regenerate backend/requirements.lock via pip-compile"
 
 setup:
 	@[ -f .env ] && echo ".env already exists" || (cp .env.example .env && echo "Created .env from .env.example")
