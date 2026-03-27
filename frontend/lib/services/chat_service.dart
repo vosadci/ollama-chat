@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 typedef TokenCallback = void Function(String token);
@@ -14,6 +15,9 @@ class ChatService {
     'BACKEND_URL',
     defaultValue: 'http://localhost:8000/api/v1',
   );
+
+  // Cached once at class load time — avoids reparsing on every request.
+  static final Uri _chatUri = Uri.parse('$_baseUrl/chat');
 
   /// Optional factory for creating the HTTP client. Defaults to [http.Client.new].
   /// Override in tests to inject a mock or fake client.
@@ -37,8 +41,7 @@ class ChatService {
     required ErrorCallback onError,
     required SourcesCallback onSources,
   }) async {
-    final uri = Uri.parse('$_baseUrl/chat');
-    final request = http.Request('POST', uri)
+    final request = http.Request('POST', _chatUri)
       ..headers['Content-Type'] = 'application/json'
       ..headers['Accept'] = 'text/event-stream'
       ..body = jsonEncode({'messages': messages});
@@ -81,8 +84,8 @@ class ChatService {
             final raw = json['sources'] as List<dynamic>;
             onSources(raw.map((s) => Map<String, String>.from(s as Map)).toList());
           }
-        } catch (_) {
-          // Malformed SSE line — skip
+        } catch (e) {
+          debugPrint('ChatService: malformed SSE line skipped ($e): $data');
         }
       }
     } on TimeoutException {
