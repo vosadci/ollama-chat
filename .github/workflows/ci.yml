@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+        run: pip install -r backend/requirements.lock -r backend/requirements-dev.txt
       - name: Run tests with coverage
         run: cd backend && python -m pytest -v --cov=. --cov-report=xml --cov-report=term-missing
       - name: Upload coverage report
@@ -41,12 +41,12 @@ jobs:
       - name: Install security tools
         run: pip install bandit pip-audit
       - name: Install project dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.lock
       - name: Run bandit (SAST)
         # -ll = medium+ severity, -ii = medium+ confidence; exit 1 on findings
         run: bandit -r backend/ -ll -ii --exclude backend/tests
       - name: Run pip-audit (dependency CVEs)
-        run: pip-audit -r backend/requirements.txt
+        run: pip-audit -r backend/requirements.lock
 
   frontend:
     name: Flutter tests
