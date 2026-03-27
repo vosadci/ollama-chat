@@ -204,7 +204,10 @@ class RAGService:
     """
 
     def __init__(self) -> None:
+        # Sync client for embedding (called via asyncio.to_thread)
         self._http_client = httpx.Client(timeout=300.0)
+        # Async client shared across all chat-stream requests for connection pooling
+        self._async_http_client = httpx.AsyncClient(timeout=120.0)
         self._collection: chromadb.Collection | None = None
         self._bm25: BM25Okapi | None = None
         self._bm25_ids: list[str] = []
@@ -214,8 +217,13 @@ class RAGService:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Close the shared HTTP client. Call from the lifespan shutdown hook."""
+        """Close the sync HTTP client. Call from the lifespan shutdown hook."""
         self._http_client.close()
+
+    async def aclose(self) -> None:
+        """Close both HTTP clients. Called from the async lifespan shutdown hook."""
+        self._http_client.close()
+        await self._async_http_client.aclose()
 
     # ------------------------------------------------------------------
     # Embedding (ChromaDB-compatible interface)

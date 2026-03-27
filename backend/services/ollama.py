@@ -9,8 +9,18 @@ from config import settings
 async def stream_chat(
     messages: list[dict],
     context_chunks: list[str] | None = None,
+    http_client: httpx.AsyncClient | None = None,
 ) -> AsyncIterator[str]:
-    """Yield raw text tokens from Ollama's streaming /api/chat endpoint."""
+    """Yield raw text tokens from Ollama's streaming /api/chat endpoint.
+
+    Args:
+        messages:      Conversation history in Ollama's message format.
+        context_chunks: RAG-retrieved text chunks to inject as a system message.
+        http_client:   Optional shared AsyncClient. When provided, the caller
+                       is responsible for its lifecycle; no new client is created.
+                       When omitted, a temporary client is created per call
+                       (intended only for unit tests / standalone use).
+    """
     if context_chunks:
         context = "\n\n---\n\n".join(context_chunks)
         system_msg = {
@@ -30,7 +40,7 @@ async def stream_chat(
         "stream": True,
     }
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async def _do_stream(client: httpx.AsyncClient) -> AsyncIterator[str]:
         async with client.stream(
             "POST",
             f"{settings.ollama_url}/api/chat",
@@ -51,3 +61,11 @@ async def stream_chat(
 
                 if chunk.get("done"):
                     break
+
+    if http_client is not None:
+        async for token in _do_stream(http_client):
+            yield token
+    else:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async for token in _do_stream(client):
+                yield token

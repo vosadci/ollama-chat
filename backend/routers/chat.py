@@ -2,6 +2,7 @@ import json
 import logging
 from typing import AsyncIterator, Literal
 
+import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,9 +46,10 @@ async def event_generator(
     messages: list[dict],
     context_chunks: list[str],
     sources: list[dict],
+    http_client: httpx.AsyncClient | None = None,
 ) -> AsyncIterator[str]:
     try:
-        async for token in stream_chat(messages, context_chunks=context_chunks):
+        async for token in stream_chat(messages, context_chunks=context_chunks, http_client=http_client):
             yield f"data: {json.dumps({'token': token})}\n\n"
     except Exception as e:
         logger.error("Stream error: %s", e)
@@ -100,7 +102,7 @@ async def chat(
     context_chunks, context_meta = await rag.retrieve(user_query) if user_query else ([], [])
 
     return StreamingResponse(
-        event_generator(messages, context_chunks, context_meta),
+        event_generator(messages, context_chunks, context_meta, rag._async_http_client),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -55,6 +55,9 @@ def _make_mock_rag(chunks=FAKE_CHUNKS, meta=FAKE_META) -> RAGService:
     """Return a mock RAGService whose retrieve() returns the given canned data."""
     mock = AsyncMock(spec=RAGService)
     mock.retrieve = AsyncMock(return_value=(chunks, meta))
+    # Provide a real AsyncClient so tests don't fail when the router accesses
+    # rag._async_http_client (used for connection-pooled Ollama streaming).
+    mock._async_http_client = httpx.AsyncClient(timeout=120.0)
     return mock
 
 

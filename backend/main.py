@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
     app.state.rag = rag
     await rag.build_index()
     yield
-    rag.close()
+    await rag.aclose()
 
 
 app = FastAPI(
