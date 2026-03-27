@@ -15,6 +15,13 @@ class ChatService {
     defaultValue: 'http://localhost:8000/api/v1',
   );
 
+  /// Optional factory for creating the HTTP client. Defaults to [http.Client.new].
+  /// Override in tests to inject a mock or fake client.
+  final http.Client Function() _clientFactory;
+
+  ChatService({http.Client Function()? clientFactory})
+      : _clientFactory = clientFactory ?? http.Client.new;
+
   http.Client? _activeClient;
   bool _cancelled = false;
 
@@ -37,7 +44,7 @@ class ChatService {
       ..body = jsonEncode({'messages': messages});
 
     _cancelled = false;
-    _activeClient = http.Client();
+    _activeClient = _clientFactory();
     final client = _activeClient!;
     try {
       final response = await client
