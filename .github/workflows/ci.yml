@@ -48,7 +48,9 @@ jobs:
         # -ll = medium+ severity, -ii = medium+ confidence; exit 1 on findings
         run: bandit -r backend/ -ll -ii --exclude backend/tests
       - name: Run pip-audit (dependency CVEs)
-        run: pip-audit -r backend/requirements.lock
+        # CVE-2026-4539: affects pygments <=2.19.2; no patched release yet.
+        # Remove --ignore-vuln once a fix is available and requirements.lock is regenerated.
+        run: pip-audit -r backend/requirements.lock --ignore-vuln CVE-2026-4539
 
   frontend:
     name: Flutter tests
