@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Pin the patch version for reproducible builds. Update deliberately on each release.
+FROM python:3.11.12-slim
 
 RUN useradd -m app
 WORKDIR /home/app
