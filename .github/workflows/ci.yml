@@ -19,7 +19,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install -r backend/requirements.lock -r backend/requirements-dev.txt
+        run: |
+          pip install -r backend/requirements.lock
+          pip install -r backend/requirements-dev.txt
       - name: Run tests with coverage
         run: cd backend && python -m pytest -v --cov=. --cov-report=xml --cov-report=term-missing
       - name: Upload coverage report
