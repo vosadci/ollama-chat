@@ -16,8 +16,8 @@ class MockChatService extends Mock implements ChatService {}
 // ---------------------------------------------------------------------------
 
 /// Wraps [ChatScreen] in a minimal MaterialApp so tests can pump it.
-Widget _app(ChatService service) => MaterialApp(
-      home: ChatScreen(service: service),
+Widget _app(ChatService service, {List<String>? suggestions}) => MaterialApp(
+      home: ChatScreen(service: service, suggestions: suggestions),
     );
 
 /// Stubs [mock.sendMessages] to call [onToken] for each token in [tokens],
@@ -296,6 +296,31 @@ void main() {
           onSources: any(named: 'onSources'),
         ),
       ).called(1);
+    });
+
+    testWidgets('custom suggestions are displayed instead of defaults',
+        (tester) async {
+      _stubTokens(mock, ['OK']);
+      const customSuggestions = ['Häufige Fragen', 'Preisliste anzeigen'];
+      await tester.pumpWidget(
+          _app(mock, suggestions: customSuggestions));
+
+      expect(find.text('Häufige Fragen'), findsOneWidget);
+      expect(find.text('Preisliste anzeigen'), findsOneWidget);
+      // Default banking strings should NOT appear
+      expect(find.text('What types of accounts are available?'), findsNothing);
+    });
+
+    testWidgets('tapping a custom chip sends that text', (tester) async {
+      _stubTokens(mock, ['Antwort']);
+      const customSuggestions = ['Wie kann ich helfen?'];
+      await tester.pumpWidget(
+          _app(mock, suggestions: customSuggestions));
+
+      await tester.tap(find.text('Wie kann ich helfen?'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Wie kann ich helfen?'), findsOneWidget);
     });
   });
 

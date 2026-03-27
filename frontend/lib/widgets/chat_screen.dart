@@ -2,6 +2,7 @@ import 'dart:math' show Random;
 
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
 import 'input_bar.dart';
@@ -9,7 +10,15 @@ import 'message_bubble.dart';
 
 class ChatScreen extends StatefulWidget {
   final ChatService? service;
-  const ChatScreen({super.key, this.service});
+
+  /// Suggestion chips shown on the empty-state screen.
+  ///
+  /// Defaults to [suggestionChips] from [app_config.dart], which in turn
+  /// reads the compile-time ``SUGGESTION_CHIPS`` dart-define (pipe-separated).
+  /// Pass an explicit list here for testing or widget customisation.
+  final List<String>? suggestions;
+
+  const ChatScreen({super.key, this.service, this.suggestions});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -277,12 +286,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  static const _suggestions = [
-    'What types of accounts are available?',
-    'Tell me about card options.',
-    'What loan products are offered?',
-    'How do I open an account?',
-  ];
+  List<String> get _suggestions => widget.suggestions ?? suggestionChips;
 
   Widget _buildEmptyState() {
     return Center(
