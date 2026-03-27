@@ -57,13 +57,16 @@ All settings are in [config.py](config.py) and can be overridden via environment
 | `PORT` | `8000` | Server port |
 | `CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated allowed CORS origins |
 | `DATA_PATH` | `./data/sample` | Directory of HTML files to index |
+| `DATA_EXCLUDED_DIRS` | `en,ru,language,...` | Comma-separated subdirectory names to skip during indexing |
 | `CHROMA_PATH` | `./chroma_db` | ChromaDB persistence directory |
-| `RAG_TOP_K` | `5` | Final number of chunks sent to the LLM |
-| `RAG_SEMANTIC_CANDIDATES` | `15` | ChromaDB candidates before RRF fusion |
-| `RAG_BM25_CANDIDATES` | `15` | BM25 candidates before RRF fusion |
-| `RAG_MMR_LAMBDA` | `0.7` | MMR relevance/diversity balance (0–1) |
-| `RAG_CHUNK_SIZE` | `800` | Maximum characters per indexed chunk |
-| `RAG_CHUNK_OVERLAP` | `80` | Characters of overlap between adjacent chunks |
+| `BM25_CACHE_PATH` | `./chroma_db/bm25_index.pkl` | Path for the persisted BM25 index |
+| `RAG_TOP_K` | `5` | Final number of chunks sent to the LLM (must be > 0) |
+| `RAG_SEMANTIC_CANDIDATES` | `15` | ChromaDB candidates before RRF fusion (must be > 0) |
+| `RAG_BM25_CANDIDATES` | `15` | BM25 candidates before RRF fusion (must be > 0) |
+| `RAG_MMR_LAMBDA` | `0.7` | MMR relevance/diversity balance (0–1 inclusive) |
+| `RAG_CHUNK_SIZE` | `800` | Maximum characters per indexed chunk (must be > 0) |
+| `RAG_CHUNK_OVERLAP` | `80` | Characters of overlap between adjacent chunks (must be ≥ 0) |
+| `SYSTEM_PROMPT` | _(see config.py)_ | System prompt template; use `{context}` as placeholder for retrieved docs |
 
 See [../docs/rag-hyperparameter-tuning.md](../docs/rag-hyperparameter-tuning.md) for tuning guidance, recommended profiles, and diagnostics.
 
@@ -118,7 +121,7 @@ Streams a chat response as Server-Sent Events.
 
 ```bash
 source .venv/bin/activate
-pytest           # 65 unit tests (offline) + 12 integration tests (skipped by default)
+pytest           # 71 unit tests (offline) + 12 integration tests (skipped by default)
 pytest -v        # verbose output
 ```
 
@@ -128,7 +131,8 @@ Unit tests are fully offline — no Ollama, no ChromaDB, no running server requi
 |---|---|
 | `tests/test_rag.py` | RAG pipeline: HTML extraction, chunking, BM25, RRF, MMR (37 tests) |
 | `tests/test_api.py` | API endpoints: SSE stream, input validation, error handling, OpenAPI schema, X-Request-ID middleware (28 tests) |
-| `tests/test_integration.py` | Full-stack: health, live SSE chat, RAG retrieve, multi-turn (13 tests — skipped unless `OLLAMA_URL` is set) |
+| `tests/test_rate_limit.py` | Rate limiter: per-IP windowed counting, 429 response shape, expiry (6 tests) |
+| `tests/test_integration.py` | Full-stack: health, live SSE chat, RAG retrieve, multi-turn (12 tests — skipped unless `OLLAMA_URL` is set) |
 
 API tests use `httpx.AsyncClient` with `ASGITransport` — the app is tested in-process without starting a server. External dependencies (Ollama, ChromaDB) are mocked via `app.dependency_overrides`.
 

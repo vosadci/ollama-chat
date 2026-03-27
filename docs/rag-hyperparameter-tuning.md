@@ -133,7 +133,7 @@ is more important than coverage.
 ## Diagnosing common problems
 
 ### "The model ignores my documents"
-- Check `DATA_PATH` contains parseable `.html` files (`get_html_files` excludes `en/`, `ru/`, `themes/`, etc.).
+- Check `DATA_PATH` contains parseable `.html` files. Directories listed in `DATA_EXCLUDED_DIRS` are skipped (default: `en,ru,language,themes,plugins,modules,storage,combine`).
 - Run with `LOG_LEVEL=DEBUG` and look for `"Index complete: N chunks"` — if N is 0 the index is empty.
 - Lower `RAG_CHUNK_SIZE` to check whether large chunks are passing the 200-character minimum.
 
@@ -149,12 +149,12 @@ is more important than coverage.
 ### "Retrieval is slow"
 - Reduce `RAG_SEMANTIC_CANDIDATES` and `RAG_BM25_CANDIDATES`.
 - Ensure ChromaDB's HNSW index is not re-built on every startup (`chroma_db/` volume is persisted in Docker Compose).
-- The BM25 index is rebuilt in-memory on startup from the ChromaDB collection; for very large corpora (> 50 k chunks) consider persisting it to disk.
+- The BM25 index is serialised to `BM25_CACHE_PATH` after the first build and reloaded on subsequent startups — cold-start rebuild only happens when the cache is missing or the index is empty.
 
 ### "Sources list contains irrelevant pages"
 - Lower `RAG_TOP_K` to 3.
 - Raise `RAG_MMR_LAMBDA` slightly.
-- Add irrelevant directories to `_EXCLUDED_DIRS` in `services/rag.py`.
+- Add irrelevant directory names to `DATA_EXCLUDED_DIRS` (comma-separated env var).
 
 ---
 

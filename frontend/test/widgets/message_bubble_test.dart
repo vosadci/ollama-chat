@@ -96,10 +96,10 @@ void main() {
         role: MessageRole.assistant,
         content: 'Answer',
         timestamp: ts,
+        sources: [
+          {'title': 'Credite de consum', 'source': 'credite.html'},
+        ],
       );
-      msg.sources = [
-        {'title': 'Credite de consum', 'source': 'credite.html'},
-      ];
       await tester.pumpWidget(_wrap(msg));
       expect(find.text('Credite de consum'), findsOneWidget);
       // SOURCE_BASE_URL is empty in tests, so chips show as plain labels
@@ -112,11 +112,11 @@ void main() {
         role: MessageRole.assistant,
         content: 'Answer',
         timestamp: ts,
+        sources: [
+          {'title': 'Credite', 'source': 'credite.html'},
+          {'title': 'Carduri', 'source': 'carduri.html'},
+        ],
       );
-      msg.sources = [
-        {'title': 'Credite', 'source': 'credite.html'},
-        {'title': 'Carduri', 'source': 'carduri.html'},
-      ];
       await tester.pumpWidget(_wrap(msg));
       expect(find.text('Credite'), findsOneWidget);
       expect(find.text('Carduri'), findsOneWidget);
@@ -128,10 +128,10 @@ void main() {
         role: MessageRole.user,
         content: 'Question',
         timestamp: ts,
+        sources: [
+          {'title': 'Some source', 'source': 'page.html'},
+        ],
       );
-      msg.sources = [
-        {'title': 'Some source', 'source': 'page.html'},
-      ];
       await tester.pumpWidget(_wrap(msg));
       expect(find.text('Some source'), findsNothing);
     });

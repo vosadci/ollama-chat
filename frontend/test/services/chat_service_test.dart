@@ -29,11 +29,17 @@ http.StreamedResponse _sseResponse(
 }
 
 /// A minimal fake [http.Client] that returns a pre-configured response.
+///
+/// [onClose] is called synchronously inside [close] before delegating to
+/// [super.close].  Tests that simulate a hanging stream use this hook to
+/// close the underlying [StreamController] so the [await for] loop exits
+/// and [sendMessages] can complete when the client is cancelled.
 class _FakeClient extends http.BaseClient {
   final http.StreamedResponse Function(http.BaseRequest) _handler;
+  final void Function()? onClose;
   bool closed = false;
 
-  _FakeClient(this._handler);
+  _FakeClient(this._handler, {this.onClose});
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -43,6 +49,7 @@ class _FakeClient extends http.BaseClient {
   @override
   void close() {
     closed = true;
+    onClose?.call();
     super.close();
   }
 }
@@ -287,32 +294,37 @@ void main() {
   group('ChatService — cancellation', () {
     test('cancel() closes the active client', () async {
       late _FakeClient fakeClient;
-      var streamCompleted = false;
+      late StreamController<List<int>> streamCtrl;
 
       final service = ChatService(
         clientFactory: () {
-          fakeClient = _FakeClient((_) {
-            // Slow stream — 1 token then hangs
-            final ctrl = StreamController<List<int>>();
-            ctrl.add(utf8.encode('data: ${jsonEncode({'token': 'hi'})}\n\n'));
-            // Never adds [DONE] — simulates long-running response
-            return http.StreamedResponse(ctrl.stream, 200);
-          });
+          streamCtrl = StreamController<List<int>>();
+          fakeClient = _FakeClient(
+            (_) {
+              // Slow stream — emits one token then hangs indefinitely.
+              streamCtrl.add(
+                utf8.encode('data: ${jsonEncode({'token': 'hi'})}\n\n'),
+              );
+              return http.StreamedResponse(streamCtrl.stream, 200);
+            },
+            // Closing the client must terminate the stream so sendMessages
+            // can complete.  A real http.Client aborts the connection; the
+            // fake replicates that by closing the StreamController.
+            onClose: () {
+              if (!streamCtrl.isClosed) streamCtrl.close();
+            },
+          );
           return fakeClient;
         },
       );
 
-      final future = service.sendMessages(
-        messages: [
-          {'role': 'user', 'content': 'Go'},
-        ],
+      await service.sendMessages(
+        messages: [{'role': 'user', 'content': 'Go'}],
         onToken: (_) => service.cancel(), // cancel on first token
         onSources: (_) {},
-        onDone: () => streamCompleted = true,
+        onDone: () {},
         onError: (_, {bool isConnectionError = false}) {},
       );
-
-      await future;
 
       expect(fakeClient.closed, isTrue);
     });
