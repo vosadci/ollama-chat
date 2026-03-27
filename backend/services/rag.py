@@ -94,7 +94,8 @@ def extract_html_text(path: Path) -> tuple[str, str]:
         parser = _BankHTMLExtractor()
         parser.feed(html)
         return parser.title, parser.get_text()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to extract text from %s: %s", path, exc)
         return "", ""
 
 
