@@ -1,7 +1,11 @@
 # Stage 1: Build the Flutter web app
 # Flutter SDK in this image is root-owned; FLUTTER_ALLOW_SUPERUSER suppresses the
 # root warning. This is safe — only static build output reaches the runtime stage.
-FROM ghcr.io/cirruslabs/flutter:stable AS builder
+#
+# Pin to an exact version for reproducible builds. To update:
+#   1. Check latest stable: https://docs.flutter.dev/release/release-notes
+#   2. Update the tag below and the flutter-version in .github/workflows/ci.yml
+FROM ghcr.io/cirruslabs/flutter:3.29.3 AS builder
 
 ENV FLUTTER_ALLOW_SUPERUSER=1
 
