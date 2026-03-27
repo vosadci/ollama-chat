@@ -9,7 +9,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code — data/ and chroma_db/ are bind-mounted at runtime
-COPY --chown=app config.py main.py ./
+COPY --chown=app config.py main.py dependencies.py ./
+COPY --chown=app middleware/ middleware/
 COPY --chown=app routers/ routers/
 COPY --chown=app services/ services/
 
