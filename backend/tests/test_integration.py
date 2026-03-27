@@ -15,7 +15,6 @@ The suite spins up the full FastAPI lifespan (RAG index build + Ollama checks)
 via ``httpx.AsyncClient`` with ASGI transport — no TCP port needed.
 """
 
-import json
 import os
 
 import httpx
@@ -23,23 +22,8 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport
 
+from tests.sse_helpers import parse_sse
 from main import app
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def parse_sse(body: bytes) -> list[dict | str]:
-    events = []
-    for line in body.decode().splitlines():
-        if line.startswith("data: "):
-            payload = line[len("data: "):]
-            try:
-                events.append(json.loads(payload))
-            except json.JSONDecodeError:
-                events.append(payload)
-    return events
 
 
 # ---------------------------------------------------------------------------

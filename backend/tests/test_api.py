@@ -8,7 +8,6 @@ External dependencies are mocked:
 This keeps tests fast and fully offline.
 """
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,29 +15,10 @@ import pytest_asyncio
 import httpx
 from httpx import ASGITransport
 
+from tests.sse_helpers import parse_sse
 from dependencies import get_rag_service
 from main import app
 from services.rag import RAGService
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def parse_sse(body: bytes) -> list[dict | str]:
-    """Parse an SSE response body into a list of payloads.
-
-    Returns strings for non-JSON events (e.g. "[DONE]"), dicts for JSON ones.
-    """
-    events = []
-    for line in body.decode().splitlines():
-        if line.startswith("data: "):
-            payload = line[len("data: "):]
-            try:
-                events.append(json.loads(payload))
-            except json.JSONDecodeError:
-                events.append(payload)
-    return events
 
 
 async def _fake_stream(*_args, **_kwargs):
