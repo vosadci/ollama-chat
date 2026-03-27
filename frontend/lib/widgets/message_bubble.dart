@@ -57,47 +57,54 @@ class MessageBubble extends StatelessWidget {
             if (message.isStreaming && message.content.isEmpty)
               const TypingIndicator()
             else if (isUser)
-              Text(
-                message.content,
-                style: TextStyle(
-                  color: contentColor,
-                  fontSize: 15,
-                  height: 1.45,
+              // ExcludeSemantics: the outer Semantics label already announces
+              // the full message content; suppress the redundant Text node.
+              ExcludeSemantics(
+                child: Text(
+                  message.content,
+                  style: TextStyle(
+                    color: contentColor,
+                    fontSize: 15,
+                    height: 1.45,
+                  ),
                 ),
               )
             else
-              MarkdownBody(
-                data: message.content,
-                styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(color: contentColor, fontSize: 15, height: 1.45),
-                  strong: TextStyle(
+              // ExcludeSemantics: same reason — outer label covers the content.
+              ExcludeSemantics(
+                child: MarkdownBody(
+                  data: message.content,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(color: contentColor, fontSize: 15, height: 1.45),
+                    strong: TextStyle(
+                        color: contentColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold),
+                    em: TextStyle(
+                        color: contentColor,
+                        fontSize: 15,
+                        fontStyle: FontStyle.italic),
+                    listBullet:
+                        TextStyle(color: contentColor, fontSize: 15, height: 1.45),
+                    h1: TextStyle(
+                        color: contentColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold),
+                    h2: TextStyle(
+                        color: contentColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                    h3: TextStyle(
+                        color: contentColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold),
+                    code: TextStyle(
                       color: contentColor,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold),
-                  em: TextStyle(
-                      color: contentColor,
-                      fontSize: 15,
-                      fontStyle: FontStyle.italic),
-                  listBullet:
-                      TextStyle(color: contentColor, fontSize: 15, height: 1.45),
-                  h1: TextStyle(
-                      color: contentColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
-                  h2: TextStyle(
-                      color: contentColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold),
-                  h3: TextStyle(
-                      color: contentColor,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold),
-                  code: TextStyle(
-                    color: contentColor,
-                    fontSize: 13,
-                    backgroundColor:
-                        colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                    fontFamily: 'monospace',
+                      fontSize: 13,
+                      backgroundColor:
+                          colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ),
               ),
