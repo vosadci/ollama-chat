@@ -32,16 +32,18 @@ void main() {
       expect(msg.isUser, isFalse);
     });
 
-    test('content is mutable', () {
+    test('content is updated via copyWith', () {
       final msg = ChatMessage(
         id: '1',
         role: MessageRole.assistant,
         content: '',
         timestamp: timestamp,
       );
-      msg.content += 'token1';
-      msg.content += 'token2';
-      expect(msg.content, 'token1token2');
+      final msg2 = msg.copyWith(content: msg.content + 'token1');
+      final msg3 = msg2.copyWith(content: msg2.content + 'token2');
+      expect(msg3.content, 'token1token2');
+      // Original is unchanged
+      expect(msg.content, '');
     });
 
     test('isStreaming defaults to false', () {
@@ -75,19 +77,37 @@ void main() {
       expect(msg.sources, isEmpty);
     });
 
-    test('sources can be assigned', () {
+    test('sources are updated via copyWith', () {
       final msg = ChatMessage(
         id: '1',
         role: MessageRole.assistant,
         content: 'Answer',
         timestamp: timestamp,
       );
-      msg.sources = [
+      final updated = msg.copyWith(sources: [
         {'title': 'Credite', 'source': 'credite.html'},
         {'title': 'Carduri', 'source': 'carduri.html'},
-      ];
-      expect(msg.sources.length, 2);
-      expect(msg.sources[0]['title'], 'Credite');
+      ]);
+      expect(updated.sources.length, 2);
+      expect(updated.sources[0]['title'], 'Credite');
+      // Original is unchanged
+      expect(msg.sources, isEmpty);
+    });
+
+    test('copyWith preserves unspecified fields', () {
+      final original = ChatMessage(
+        id: 'abc',
+        role: MessageRole.assistant,
+        content: 'original',
+        timestamp: timestamp,
+        isStreaming: true,
+      );
+      final updated = original.copyWith(content: 'new content');
+      expect(updated.id, 'abc');
+      expect(updated.role, MessageRole.assistant);
+      expect(updated.content, 'new content');
+      expect(updated.isStreaming, isTrue);
+      expect(updated.timestamp, timestamp);
     });
 
     test('id is stored correctly', () {

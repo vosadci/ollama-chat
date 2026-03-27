@@ -31,6 +31,14 @@ class _ChatScreenState extends State<ChatScreen> {
     return List.generate(32, (_) => rng.nextInt(16).toRadixString(16)).join();
   }
 
+  /// Finds the message with [id] in [_messages] and replaces it with
+  /// the result of [updater]. No-ops if the id is not found.
+  /// Must be called inside [setState].
+  void _updateMsg(String id, ChatMessage Function(ChatMessage) updater) {
+    final idx = _messages.indexWhere((m) => m.id == id);
+    if (idx != -1) _messages[idx] = updater(_messages[idx]);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,15 +84,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _pendingText = text;
     _controller.clear();
 
+    final userMsgId = _uid();
+    final assistantMsgId = _uid();
+
     final userMsg = ChatMessage(
-      id: _uid(),
+      id: userMsgId,
       role: MessageRole.user,
       content: text,
       timestamp: DateTime.now(),
     );
 
     final assistantMsg = ChatMessage(
-      id: _uid(),
+      id: assistantMsgId,
       role: MessageRole.assistant,
       content: '',
       timestamp: DateTime.now(),
@@ -99,7 +110,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Build history excluding the empty streaming placeholder
     final history = _messages
-        .where((m) => m != assistantMsg)
+        .where((m) => m.id != assistantMsgId)
         .map((m) => {
               'role': m.isUser ? 'user' : 'assistant',
               'content': m.content,
@@ -110,17 +121,22 @@ class _ChatScreenState extends State<ChatScreen> {
       messages: history,
       onSources: (sources) {
         if (!mounted) return;
-        setState(() => assistantMsg.sources = sources);
+        setState(() => _updateMsg(assistantMsgId, (m) => m.copyWith(sources: sources)));
       },
       onToken: (token) {
         if (!mounted) return;
-        setState(() => assistantMsg.content += token);
+        setState(() {
+          _updateMsg(
+            assistantMsgId,
+            (m) => m.copyWith(content: m.content + token),
+          );
+        });
         _scrollToBottom();
       },
       onDone: () {
         if (!mounted) return;
         setState(() {
-          assistantMsg.isStreaming = false;
+          _updateMsg(assistantMsgId, (m) => m.copyWith(isStreaming: false));
           _isLoading = false;
         });
         _scrollToBottom();
@@ -129,7 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!mounted) return;
         setState(() {
           _messages.removeWhere(
-            (m) => m == userMsg || m == assistantMsg,
+            (m) => m.id == userMsgId || m.id == assistantMsgId,
           );
           _isLoading = false;
         });
@@ -144,9 +160,10 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         } else {
           setState(() {
-            assistantMsg.content = '⚠ $err';
-            assistantMsg.isStreaming = false;
-            _messages.addAll([userMsg, assistantMsg]);
+            _messages.addAll([
+              userMsg,
+              assistantMsg.copyWith(content: '⚠ $err', isStreaming: false),
+            ]);
           });
         }
       },
