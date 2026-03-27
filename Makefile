@@ -77,9 +77,12 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
 
 # Regenerate the pinned lock file. Run this after editing requirements.txt,
-# or to update to newer patch versions. Requires pip-tools (pip install pip-tools).
-# Must be run with the same Python version as the backend (3.11).
+# or to update to newer patch versions.
+# MUST be run with Python 3.11 to match the Docker runtime (python:3.11.12-slim):
+#   pip install pip-tools
+#   python3.11 -m piptools compile --generate-hashes \
+#       --output-file backend/requirements.lock backend/requirements.txt
 lock:
-	pip-compile --generate-hashes \
+	python3.11 -m piptools compile --generate-hashes --strip-extras \
 	  --output-file backend/requirements.lock \
 	  backend/requirements.txt
