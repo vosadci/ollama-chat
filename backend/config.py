@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -21,6 +22,34 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 800
     rag_chunk_overlap: int = 80
     data_path: str = "./data/sample"
+
+    @field_validator("rag_top_k", "rag_semantic_candidates", "rag_bm25_candidates")
+    @classmethod
+    def _positive_int(cls, v: int, info) -> int:
+        if v <= 0:
+            raise ValueError(f"{info.field_name} must be a positive integer, got {v}")
+        return v
+
+    @field_validator("rag_mmr_lambda")
+    @classmethod
+    def _lambda_range(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"rag_mmr_lambda must be in [0, 1], got {v}")
+        return v
+
+    @field_validator("rag_chunk_size")
+    @classmethod
+    def _chunk_size_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError(f"rag_chunk_size must be positive, got {v}")
+        return v
+
+    @field_validator("rag_chunk_overlap")
+    @classmethod
+    def _overlap_non_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError(f"rag_chunk_overlap must be non-negative, got {v}")
+        return v
 
     # System prompt prepended to every chat request when RAG context is present.
     # Override in .env or via SYSTEM_PROMPT environment variable.
