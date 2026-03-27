@@ -289,11 +289,11 @@ class TestRAGServiceRetrieveFailureModes:
         svc._http_client.close()
 
     async def test_embedding_failure_returns_empty(self, rag):
-        """When _embed raises, retrieve() degrades gracefully to ([], [])."""
+        """When _embedder.embed raises, retrieve() degrades gracefully to ([], [])."""
         mock_col = Mock()
         mock_col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]]}
         rag._get_collection = Mock(return_value=mock_col)
-        rag._embed = Mock(side_effect=RuntimeError("Ollama embed endpoint down"))
+        rag._embedder.embed = Mock(side_effect=RuntimeError("Ollama embed endpoint down"))
 
         result = await rag.retrieve("carduri de debit")
 
@@ -312,8 +312,8 @@ class TestRAGServiceRetrieveFailureModes:
         mock_col = Mock()
         mock_col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]]}
         rag._get_collection = Mock(return_value=mock_col)
-        rag._embed = Mock(return_value=[[0.1] * 10])
-        # BM25 index is None by default → BM25 leg is skipped
+        rag._embedder.embed = Mock(return_value=[[0.1] * 10])
+        # BM25 index not ready by default → BM25 leg is skipped
 
         result = await rag.retrieve("orice întrebare")
 

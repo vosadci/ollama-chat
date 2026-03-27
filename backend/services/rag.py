@@ -197,11 +197,118 @@ def _mmr_rerank(
 
 
 # ---------------------------------------------------------------------------
-# RAGService — encapsulates all mutable RAG state
+# _Embedder — Ollama embedding client
+# ---------------------------------------------------------------------------
+
+class _Embedder:
+    """Calls Ollama's /api/embed endpoint and returns dense vectors.
+
+    Owns a synchronous httpx.Client that is intended to be called via
+    ``asyncio.to_thread`` from async contexts.
+    """
+
+    def __init__(self, http_client: httpx.Client) -> None:
+        self._http_client = http_client
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return one embedding vector per text.  Raises RuntimeError on failure."""
+        try:
+            response = self._http_client.post(
+                f"{settings.ollama_url}/api/embed",
+                json={"model": settings.embed_model, "input": texts},
+            )
+            response.raise_for_status()
+            return response.json()["embeddings"]
+        except Exception as exc:
+            raise RuntimeError(f"Embedding failed: {exc}") from exc
+
+    def as_chroma_callable(self) -> "_ChromaEmbeddingCallable":
+        """Return a ChromaDB-compatible embedding callable backed by this embedder."""
+        return _ChromaEmbeddingCallable(self)
+
+
+class _ChromaEmbeddingCallable:
+    """Thin ChromaDB adapter that delegates to _Embedder."""
+
+    def __init__(self, embedder: _Embedder) -> None:
+        self._embedder = embedder
+
+    def name(self) -> str:
+        return "ollama"
+
+    def embed_query(self, input: str) -> list[float]:
+        return self([input])[0]
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        return self._embedder.embed(input)
+
+
+# ---------------------------------------------------------------------------
+# _BM25Index — keyword retrieval with disk-persistence
+# ---------------------------------------------------------------------------
+
+class _BM25Index:
+    """Encapsulates the BM25 model, its document ID list, and cache I/O."""
+
+    def __init__(self) -> None:
+        self._bm25: BM25Okapi | None = None
+        self._ids: list[str] = []
+
+    @property
+    def is_ready(self) -> bool:
+        return self._bm25 is not None and bool(self._ids)
+
+    def top_ids(self, query: str, top_k: int) -> list[str]:
+        """Return up to [top_k] document IDs ranked by BM25 score."""
+        if not self.is_ready:
+            return []
+        tokens = query.lower().split()
+        scores = self._bm25.get_scores(tokens)  # type: ignore[union-attr]
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        return [self._ids[i] for i in top_indices]
+
+    def build(self, collection: chromadb.Collection) -> None:
+        """Build the BM25 index from all documents in [collection]."""
+        result = collection.get(include=["documents"])
+        docs = result["documents"]
+        ids = result["ids"]
+        tokenised = [doc.lower().split() for doc in docs]
+        self._bm25 = BM25Okapi(tokenised)
+        self._ids = ids
+        logger.info("BM25 index built over %d chunks.", len(ids))
+
+    def load_from_cache(self, path: Path) -> bool:
+        """Load a previously serialised index. Returns True on success."""
+        if not path.exists():
+            return False
+        try:
+            with path.open("rb") as fh:
+                data = pickle.load(fh)
+            self._bm25 = data["bm25"]
+            self._ids = data["ids"]
+            logger.info("BM25 index loaded from cache (%d chunks).", len(self._ids))
+            return True
+        except Exception as exc:
+            logger.warning("Failed to load BM25 cache: %s — will rebuild.", exc)
+            return False
+
+    def save_to_cache(self, path: Path) -> None:
+        """Serialise the current index to [path] for fast cold-start reuse."""
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("wb") as fh:
+                pickle.dump({"bm25": self._bm25, "ids": self._ids}, fh)
+            logger.info("BM25 index saved to cache (%s).", path)
+        except Exception as exc:
+            logger.warning("Failed to save BM25 cache: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# RAGService — orchestrates Embedder, BM25Index, and ChromaDB
 # ---------------------------------------------------------------------------
 
 class RAGService:
-    """Holds the HTTP client, ChromaDB collection, and BM25 index.
+    """Holds the HTTP clients, ChromaDB collection, embedder, and BM25 index.
 
     Instantiated once at application startup (see main.py lifespan) and
     injected into route handlers via FastAPI's dependency system.  All
@@ -210,13 +317,13 @@ class RAGService:
     """
 
     def __init__(self) -> None:
-        # Sync client for embedding (called via asyncio.to_thread)
+        # Sync client owned by _Embedder (called via asyncio.to_thread)
         self._http_client = httpx.Client(timeout=300.0)
+        self._embedder = _Embedder(self._http_client)
         # Async client shared across all chat-stream requests for connection pooling
         self._async_http_client = httpx.AsyncClient(timeout=120.0)
+        self._bm25_index = _BM25Index()
         self._collection: chromadb.Collection | None = None
-        self._bm25: BM25Okapi | None = None
-        self._bm25_ids: list[str] = []
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -232,41 +339,6 @@ class RAGService:
         await self._async_http_client.aclose()
 
     # ------------------------------------------------------------------
-    # Embedding (ChromaDB-compatible interface)
-    # ------------------------------------------------------------------
-
-    def _embed(self, texts: list[str]) -> list[list[float]]:
-        """Call Ollama's /api/embed endpoint and return dense vectors."""
-        try:
-            response = self._http_client.post(
-                f"{settings.ollama_url}/api/embed",
-                json={"model": settings.embed_model, "input": texts},
-            )
-            response.raise_for_status()
-            return response.json()["embeddings"]
-        except Exception as exc:
-            raise RuntimeError(f"Embedding failed: {exc}") from exc
-
-    def _embedding_function(self) -> "RAGService._EmbeddingCallable":
-        """Return a ChromaDB-compatible embedding callable backed by this service."""
-        return RAGService._EmbeddingCallable(self)
-
-    class _EmbeddingCallable:
-        """Thin ChromaDB adapter that delegates to RAGService._embed."""
-
-        def __init__(self, service: "RAGService") -> None:
-            self._service = service
-
-        def name(self) -> str:
-            return "ollama"
-
-        def embed_query(self, input: str) -> list[float]:
-            return self([input])[0]
-
-        def __call__(self, input: list[str]) -> list[list[float]]:
-            return self._service._embed(input)
-
-    # ------------------------------------------------------------------
     # ChromaDB collection
     # ------------------------------------------------------------------
 
@@ -276,54 +348,10 @@ class RAGService:
         client = chromadb.PersistentClient(path=settings.chroma_path)
         self._collection = client.get_or_create_collection(
             name=settings.chroma_collection,
-            embedding_function=self._embedding_function(),
+            embedding_function=self._embedder.as_chroma_callable(),
             metadata={"hnsw:space": "cosine"},
         )
         return self._collection
-
-    # ------------------------------------------------------------------
-    # BM25 index
-    # ------------------------------------------------------------------
-
-    def _bm25_cache_path(self) -> Path:
-        return Path(settings.bm25_cache_path)
-
-    def _load_bm25_from_cache(self) -> bool:
-        """Load a previously serialised BM25 index. Returns True on success."""
-        cache = self._bm25_cache_path()
-        if not cache.exists():
-            return False
-        try:
-            with cache.open("rb") as fh:
-                data = pickle.load(fh)
-            self._bm25 = data["bm25"]
-            self._bm25_ids = data["ids"]
-            logger.info("BM25 index loaded from cache (%d chunks).", len(self._bm25_ids))
-            return True
-        except Exception as exc:
-            logger.warning("Failed to load BM25 cache: %s — will rebuild.", exc)
-            return False
-
-    def _save_bm25_to_cache(self) -> None:
-        """Serialise the current BM25 index to disk for fast cold-start reuse."""
-        cache = self._bm25_cache_path()
-        try:
-            cache.parent.mkdir(parents=True, exist_ok=True)
-            with cache.open("wb") as fh:
-                pickle.dump({"bm25": self._bm25, "ids": self._bm25_ids}, fh)
-            logger.info("BM25 index saved to cache (%s).", cache)
-        except Exception as exc:
-            logger.warning("Failed to save BM25 cache: %s", exc)
-
-    def _build_bm25(self, collection: chromadb.Collection) -> None:
-        result = collection.get(include=["documents"])
-        docs = result["documents"]
-        ids = result["ids"]
-        tokenised = [doc.lower().split() for doc in docs]
-        self._bm25 = BM25Okapi(tokenised)
-        self._bm25_ids = ids
-        logger.info("BM25 index built over %d chunks.", len(ids))
-        self._save_bm25_to_cache()
 
     # ------------------------------------------------------------------
     # Indexing
@@ -332,15 +360,17 @@ class RAGService:
     async def build_index(self) -> None:
         collection = await asyncio.to_thread(self._get_collection)
         count = await asyncio.to_thread(collection.count)
+        cache_path = Path(settings.bm25_cache_path)
 
         if count > 0:
             logger.info("Index already built (%d chunks), loading BM25 cache...", count)
             # Try fast path: load persisted index from disk.
-            loaded = await asyncio.to_thread(self._load_bm25_from_cache)
+            loaded = await asyncio.to_thread(self._bm25_index.load_from_cache, cache_path)
             if not loaded:
                 # Cache missing or corrupt — rebuild and re-save.
                 logger.info("BM25 cache miss — rebuilding from ChromaDB.")
-                await asyncio.to_thread(self._build_bm25, collection)
+                await asyncio.to_thread(self._bm25_index.build, collection)
+                await asyncio.to_thread(self._bm25_index.save_to_cache, cache_path)
             return
 
         data_path = Path(settings.data_path)
@@ -392,7 +422,8 @@ class RAGService:
             total_chunks += len(batch_ids)
 
         logger.info("Index complete: %d chunks from %d files.", total_chunks, len(files))
-        await asyncio.to_thread(self._build_bm25, collection)
+        await asyncio.to_thread(self._bm25_index.build, collection)
+        await asyncio.to_thread(self._bm25_index.save_to_cache, cache_path)
 
     # ------------------------------------------------------------------
     # Retrieval (hybrid: semantic + BM25 + RRF + MMR)
@@ -404,7 +435,7 @@ class RAGService:
             collection = await asyncio.to_thread(self._get_collection)
 
             # --- Semantic retrieval ---
-            embeddings = await asyncio.to_thread(self._embed, [query])
+            embeddings = await asyncio.to_thread(self._embedder.embed, [query])
             sem_results = await asyncio.to_thread(
                 collection.query,
                 query_embeddings=embeddings,
@@ -416,14 +447,9 @@ class RAGService:
             sem_meta: list[dict] = sem_results["metadatas"][0]
 
             # --- BM25 retrieval ---
-            bm25_ids: list[str] = []
-            if self._bm25 is not None and self._bm25_ids:
-                query_tokens = query.lower().split()
-                scores = self._bm25.get_scores(query_tokens)
-                top_indices = sorted(
-                    range(len(scores)), key=lambda i: scores[i], reverse=True
-                )[:settings.rag_bm25_candidates]
-                bm25_ids = [self._bm25_ids[i] for i in top_indices]
+            bm25_ids = await asyncio.to_thread(
+                self._bm25_index.top_ids, query, settings.rag_bm25_candidates
+            )
 
             # --- RRF fusion ---
             fused_ids = _rrf([sem_ids, bm25_ids]) if bm25_ids else sem_ids
