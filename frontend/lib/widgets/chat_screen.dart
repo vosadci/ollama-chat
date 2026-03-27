@@ -15,6 +15,9 @@ const double _kScrollAtBottomThreshold = 80.0;
 // Minimum interval between auto-scroll animations while tokens are streaming.
 const Duration _kScrollDebounce = Duration(milliseconds: 100);
 
+// Maximum number of messages retained in the conversation history.
+const int _kMaxMessageHistory = 200;
+
 class ChatScreen extends StatefulWidget {
   final ChatService? service;
 
@@ -35,7 +38,8 @@ class _ChatScreenState extends State<ChatScreen> {
   late final _service = widget.service ?? ChatService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
-  final List<ChatMessage> _messages = [];
+  // Insertion-ordered Map gives O(1) lookup by ID while preserving display order.
+  final _messages = <String, ChatMessage>{};
   bool _isLoading = false;
   bool _atBottom = true;
   String? _pendingText;
@@ -49,12 +53,22 @@ class _ChatScreenState extends State<ChatScreen> {
     return List.generate(32, (_) => rng.nextInt(16).toRadixString(16)).join();
   }
 
-  /// Finds the message with [id] in [_messages] and replaces it with
-  /// the result of [updater]. No-ops if the id is not found.
+  /// Updates message [id] in place. O(1) via Map lookup.
   /// Must be called inside [setState].
   void _updateMsg(String id, ChatMessage Function(ChatMessage) updater) {
-    final idx = _messages.indexWhere((m) => m.id == id);
-    if (idx != -1) _messages[idx] = updater(_messages[idx]);
+    final msg = _messages[id];
+    if (msg != null) _messages[id] = updater(msg);
+  }
+
+  /// Adds [msgs] to the conversation, trimming the oldest entries if the
+  /// history cap ([_kMaxMessageHistory]) is exceeded.
+  void _addMessages(List<ChatMessage> msgs) {
+    for (final m in msgs) {
+      _messages[m.id] = m;
+    }
+    while (_messages.length > _kMaxMessageHistory) {
+      _messages.remove(_messages.keys.first);
+    }
   }
 
   @override
@@ -140,13 +154,13 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     setState(() {
-      _messages.addAll([userMsg, assistantMsg]);
+      _addMessages([userMsg, assistantMsg]);
       _isLoading = true;
     });
     _scrollToBottom(immediate: true);
 
     // Build history excluding the empty streaming placeholder
-    final history = _messages
+    final history = _messages.values
         .where((m) => m.id != assistantMsgId)
         .map((m) => {
               'role': m.isUser ? 'user' : 'assistant',
@@ -181,9 +195,8 @@ class _ChatScreenState extends State<ChatScreen> {
       onError: (err, {bool isConnectionError = false}) {
         if (!mounted) return;
         setState(() {
-          _messages.removeWhere(
-            (m) => m.id == userMsgId || m.id == assistantMsgId,
-          );
+          _messages.remove(userMsgId);
+          _messages.remove(assistantMsgId);
           _isLoading = false;
         });
         if (isConnectionError) {
@@ -199,7 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Show a generic message to the user; the raw error may contain
           // server internals (stack traces, HTML error pages, etc.).
           setState(() {
-            _messages.addAll([
+            _addMessages([
               userMsg,
               assistantMsg.copyWith(
                 content: '⚠ Something went wrong. Please try again.',
@@ -244,6 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final messageList = _messages.values.toList();
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -299,14 +313,17 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    key: const Key('messageList'),
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _messages.length,
-                    itemBuilder: (_, i) => MessageBubble(message: _messages[i]),
+            child: messageList.isEmpty
+                ? _EmptyStateView(
+                    suggestions: widget.suggestions ?? suggestionChips,
+                    onSuggestionTap: (q) {
+                      _controller.text = q;
+                      _send();
+                    },
+                  )
+                : _MessageListView(
+                    messages: messageList,
+                    scrollController: _scrollController,
                   ),
           ),
           const Divider(height: 1),
@@ -320,10 +337,23 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+}
 
-  List<String> get _suggestions => widget.suggestions ?? suggestionChips;
+// ---------------------------------------------------------------------------
+// Sub-widgets
+// ---------------------------------------------------------------------------
 
-  Widget _buildEmptyState() {
+class _EmptyStateView extends StatelessWidget {
+  final List<String> suggestions;
+  final void Function(String) onSuggestionTap;
+
+  const _EmptyStateView({
+    required this.suggestions,
+    required this.onSuggestionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
       key: const Key('emptyState'),
       child: Padding(
@@ -348,16 +378,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
-                children: _suggestions.map((q) {
+                children: suggestions.map((q) {
                   return Semantics(
                     button: true,
                     label: 'Ask: $q',
                     child: ActionChip(
                       label: Text(q),
-                      onPressed: () {
-                        _controller.text = q;
-                        _send();
-                      },
+                      onPressed: () => onSuggestionTap(q),
                     ),
                   );
                 }).toList(),
@@ -366,6 +393,27 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MessageListView extends StatelessWidget {
+  final List<ChatMessage> messages;
+  final ScrollController scrollController;
+
+  const _MessageListView({
+    required this.messages,
+    required this.scrollController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      key: const Key('messageList'),
+      controller: scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: messages.length,
+      itemBuilder: (_, i) => MessageBubble(message: messages[i]),
     );
   }
 }
