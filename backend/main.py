@@ -1,7 +1,10 @@
 import logging
+import os
 import uvicorn
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,10 +13,55 @@ from routers.chat import router as chat_router
 from services.rag import build_index, close_http_client
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def _validate_config() -> None:
+    """Fail fast on obvious misconfigurations before starting the server.
+
+    Fatal conditions (raise RuntimeError):
+      - DATA_PATH does not exist or is not a directory
+      - CHROMA_PATH parent directory is not writable
+
+    Non-fatal conditions (log a warning):
+      - OLLAMA_URL is not reachable (Ollama may still be starting up)
+    """
+    # --- DATA_PATH ---
+    data_path = Path(settings.data_path)
+    if not data_path.exists():
+        raise RuntimeError(
+            f"DATA_PATH '{data_path}' does not exist. "
+            "Mount the directory or update DATA_PATH in .env."
+        )
+    if not data_path.is_dir():
+        raise RuntimeError(f"DATA_PATH '{data_path}' exists but is not a directory.")
+
+    # --- CHROMA_PATH (writable) ---
+    chroma_path = Path(settings.chroma_path)
+    chroma_parent = chroma_path.parent
+    if not os.access(chroma_parent, os.W_OK):
+        raise RuntimeError(
+            f"CHROMA_PATH parent '{chroma_parent}' is not writable. "
+            "Check volume mount permissions."
+        )
+
+    # --- OLLAMA_URL reachability (non-fatal: Ollama may still be starting) ---
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"{settings.ollama_url}/api/tags")
+            resp.raise_for_status()
+        logger.info("Ollama reachable at %s", settings.ollama_url)
+    except Exception as exc:
+        logger.warning(
+            "Ollama not reachable at %s: %s — will retry on first request.",
+            settings.ollama_url,
+            exc,
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_config()
     await build_index()
     yield
     close_http_client()
