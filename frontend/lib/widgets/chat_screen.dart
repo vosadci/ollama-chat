@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' show Random;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,12 @@ import '../models/message.dart';
 import '../services/chat_service.dart';
 import 'input_bar.dart';
 import 'message_bubble.dart';
+
+// Pixels from the bottom edge at which the view is considered "at bottom".
+const double _kScrollAtBottomThreshold = 80.0;
+
+// Minimum interval between auto-scroll animations while tokens are streaming.
+const Duration _kScrollDebounce = Duration(milliseconds: 100);
 
 class ChatScreen extends StatefulWidget {
   final ChatService? service;
@@ -32,6 +39,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
   bool _atBottom = true;
   String? _pendingText;
+  Timer? _scrollDebounce;
 
   // Generates a cryptographically random 128-bit hex ID.
   // Avoids the uuid package to keep dependencies minimal.
@@ -54,12 +62,24 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.addListener(() {
       if (!_scrollController.hasClients) return;
       final atBottom = _scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 80;
+          _scrollController.position.maxScrollExtent - _kScrollAtBottomThreshold;
       if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
     });
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool immediate = false}) {
+    if (!immediate) {
+      // Debounce rapid calls (e.g. one per streaming token) to avoid
+      // queuing hundreds of animations that cause jank.
+      if (_scrollDebounce?.isActive ?? false) return;
+      _scrollDebounce = Timer(_kScrollDebounce, _doScrollToBottom);
+    } else {
+      _scrollDebounce?.cancel();
+      _doScrollToBottom();
+    }
+  }
+
+  void _doScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -115,7 +135,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _messages.addAll([userMsg, assistantMsg]);
       _isLoading = true;
     });
-    _scrollToBottom();
+    _scrollToBottom(immediate: true);
 
     // Build history excluding the empty streaming placeholder
     final history = _messages
@@ -148,7 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _updateMsg(assistantMsgId, (m) => m.copyWith(isStreaming: false));
           _isLoading = false;
         });
-        _scrollToBottom();
+        _scrollToBottom(immediate: true);
       },
       onError: (err, {bool isConnectionError = false}) {
         if (!mounted) return;
@@ -168,10 +188,15 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           );
         } else {
+          // Show a generic message to the user; the raw error may contain
+          // server internals (stack traces, HTML error pages, etc.).
           setState(() {
             _messages.addAll([
               userMsg,
-              assistantMsg.copyWith(content: '⚠ $err', isStreaming: false),
+              assistantMsg.copyWith(
+                content: '⚠ Something went wrong. Please try again.',
+                isStreaming: false,
+              ),
             ]);
           });
         }
@@ -202,6 +227,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _scrollDebounce?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
