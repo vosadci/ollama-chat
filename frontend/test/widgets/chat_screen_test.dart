@@ -110,6 +110,8 @@ void main() {
   setUp(() {
     mock = MockChatService();
     when(() => mock.cancel()).thenAnswer((_) {});
+    // fetchConfig is called in initState; return null to use compile-time defaults.
+    when(() => mock.fetchConfig()).thenAnswer((_) async => null);
   });
 
   // -------------------------------------------------------------------------

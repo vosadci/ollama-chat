@@ -40,6 +40,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _atBottom = true;
   String? _pendingText;
   Timer? _scrollDebounce;
+  int _maxMessageLength = 32000; // overwritten by fetchConfig() on init
 
   // Generates a cryptographically random 128-bit hex ID.
   // Avoids the uuid package to keep dependencies minimal.
@@ -59,6 +60,15 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Fetch server config asynchronously; keep the compile-time default until
+    // the response arrives or if the request fails.
+    _service.fetchConfig().then((cfg) {
+      if (!mounted) return;
+      final limit = cfg?['max_message_length'];
+      if (limit is int && limit > 0) {
+        setState(() => _maxMessageLength = limit);
+      }
+    });
     _scrollController.addListener(() {
       if (!_scrollController.hasClients) return;
       final atBottom = _scrollController.position.pixels >=
@@ -90,8 +100,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
   }
-
-  static const _maxMessageLength = 32000;
 
   Future<void> _send() async {
     final text = _controller.text.trim();

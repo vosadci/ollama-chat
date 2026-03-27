@@ -253,6 +253,34 @@ class TestChatErrorHandling:
 
 
 # ---------------------------------------------------------------------------
+# /api/v1/config
+# ---------------------------------------------------------------------------
+
+class TestConfig:
+    async def test_returns_200(self, client):
+        r = await client.get("/api/v1/config")
+        assert r.status_code == 200
+
+    async def test_response_shape(self, client):
+        r = await client.get("/api/v1/config")
+        body = r.json()
+        assert "max_message_length" in body
+        assert isinstance(body["max_message_length"], int)
+        assert body["max_message_length"] > 0
+
+    async def test_max_message_length_matches_validation(self, client):
+        """The config value must equal the limit enforced by /chat (422 at limit+1)."""
+        r = await client.get("/api/v1/config")
+        limit = r.json()["max_message_length"]
+        # One char over the limit should be rejected
+        r2 = await client.post(
+            "/api/v1/chat",
+            json={"messages": [{"role": "user", "content": "x" * (limit + 1)}]},
+        )
+        assert r2.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # OpenAPI schema
 # ---------------------------------------------------------------------------
 

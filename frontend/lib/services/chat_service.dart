@@ -18,6 +18,28 @@ class ChatService {
 
   // Cached once at class load time — avoids reparsing on every request.
   static final Uri _chatUri = Uri.parse('$_baseUrl/chat');
+  static final Uri _configUri = Uri.parse(
+    '${_baseUrl.replaceFirst('/api/v1', '')}/api/v1/config',
+  );
+
+  /// Fetches server-side config values.  Returns null on any network failure
+  /// so callers can fall back to their compile-time defaults.
+  Future<Map<String, dynamic>?> fetchConfig() async {
+    final client = _clientFactory();
+    try {
+      final response = await client
+          .get(_configUri)
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('ChatService: fetchConfig failed ($e) — using defaults');
+    } finally {
+      client.close();
+    }
+    return null;
+  }
 
   /// Optional factory for creating the HTTP client. Defaults to [http.Client.new].
   /// Override in tests to inject a mock or fake client.

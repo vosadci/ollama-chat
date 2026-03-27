@@ -16,13 +16,18 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+# Exposed via GET /api/v1/config so the frontend can read it at runtime
+# and stay in sync without hardcoding the limit on both sides.
+MAX_MESSAGE_LENGTH = 32_000
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"] = Field(
         description="Message author role."
     )
     content: str = Field(
-        max_length=32_000,
-        description="Message text. Maximum 32 000 characters.",
+        max_length=MAX_MESSAGE_LENGTH,
+        description=f"Message text. Maximum {MAX_MESSAGE_LENGTH} characters.",
     )
 
 

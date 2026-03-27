@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from middleware.request_id import RequestIDFilter, RequestIDMiddleware
-from routers.chat import router as chat_router
+from routers.chat import router as chat_router, MAX_MESSAGE_LENGTH
 from services.rag import RAGService
 
 logging.basicConfig(
@@ -70,6 +70,20 @@ async def _validate_config() -> None:
     # Run the blocking httpx call off the event loop to avoid stalling uvicorn.
     await asyncio.to_thread(_check_ollama_sync)
 
+    # --- Rate limiter: warn if running with multiple workers ---
+    # The in-process rate limiter uses a global dict that is NOT shared across
+    # OS processes.  With multiple uvicorn workers each process keeps its own
+    # counter, so the effective limit becomes max_calls × worker_count.
+    workers = int(os.environ.get("UVICORN_WORKERS", "1"))
+    if workers > 1:
+        logger.warning(
+            "Running with %d workers but the rate limiter is in-process only. "
+            "Each worker enforces the limit independently — effective per-IP "
+            "limit is %d × %d = %d req/min. "
+            "Use a shared store (e.g. Redis) for true per-IP limiting.",
+            workers, workers, 10, workers * 10,
+        )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -124,6 +138,24 @@ app.include_router(chat_router, prefix="/api/v1")
 async def health():
     """Returns 200 when the service is up. Used by the Docker healthcheck."""
     return {"status": "ok", "model": settings.model}
+
+
+@app.get(
+    "/api/v1/config",
+    tags=["config"],
+    summary="Client configuration",
+    response_description="Read-only values the frontend needs at runtime",
+)
+async def get_config():
+    """Return read-only server configuration values consumed by the frontend.
+
+    Clients should call this once at startup and cache the result.
+    Currently exposes:
+
+    - **max_message_length** — hard character limit enforced by the chat
+      endpoint; mirrors the `max_length` constraint on `ChatMessage.content`.
+    """
+    return {"max_message_length": MAX_MESSAGE_LENGTH}
 
 
 if __name__ == "__main__":
