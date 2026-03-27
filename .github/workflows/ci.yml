@@ -20,8 +20,33 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-      - name: Run tests
-        run: cd backend && python -m pytest -v
+      - name: Run tests with coverage
+        run: cd backend && python -m pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false   # Coverage upload failure does not fail the build
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install security tools
+        run: pip install bandit pip-audit
+      - name: Install project dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Run bandit (SAST)
+        # -ll = medium+ severity, -ii = medium+ confidence; exit 1 on findings
+        run: bandit -r backend/ -ll -ii --exclude backend/tests
+      - name: Run pip-audit (dependency CVEs)
+        run: pip-audit -r backend/requirements.txt
 
   frontend:
     name: Flutter tests
@@ -36,5 +61,12 @@ jobs:
         run: flutter pub get
         working-directory: frontend
       - name: Run tests
-        run: flutter test
+        run: flutter test --coverage
         working-directory: frontend
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false
