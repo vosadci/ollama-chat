@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' show Random;
 
 import 'package:flutter/material.dart';
 
@@ -24,9 +24,12 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _atBottom = true;
   String? _pendingText;
 
-  String _uid() =>
-      DateTime.now().microsecondsSinceEpoch.toString() +
-      Random().nextInt(9999).toString();
+  // Generates a cryptographically random 128-bit hex ID.
+  // Avoids the uuid package to keep dependencies minimal.
+  String _uid() {
+    final rng = Random.secure();
+    return List.generate(32, (_) => rng.nextInt(16).toRadixString(16)).join();
+  }
 
   @override
   void initState() {
@@ -51,9 +54,24 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  static const _maxMessageLength = 32000;
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _isLoading) return;
+
+    if (text.length > _maxMessageLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Message too long — max $_maxMessageLength characters '
+            '(${text.length} entered).',
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
 
     _pendingText = text;
     _controller.clear();
