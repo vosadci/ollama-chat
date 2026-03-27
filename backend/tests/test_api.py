@@ -293,3 +293,34 @@ class TestOpenAPISchema:
     async def test_redoc_reachable(self, client):
         r = await client.get("/redoc")
         assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# X-Request-ID middleware
+# ---------------------------------------------------------------------------
+
+class TestRequestIDMiddleware:
+    async def test_response_has_request_id_header(self, client):
+        r = await client.get("/health")
+        assert "x-request-id" in r.headers
+
+    async def test_generated_id_is_uuid4(self, client):
+        import uuid
+        r = await client.get("/health")
+        request_id = r.headers["x-request-id"]
+        # Should be parseable as a UUID
+        uuid.UUID(request_id, version=4)
+
+    async def test_supplied_id_is_echoed_back(self, client):
+        r = await client.get("/health", headers={"X-Request-ID": "my-trace-abc-123"})
+        assert r.headers["x-request-id"] == "my-trace-abc-123"
+
+    async def test_oversized_id_is_truncated(self, client):
+        long_id = "x" * 200
+        r = await client.get("/health", headers={"X-Request-ID": long_id})
+        assert len(r.headers["x-request-id"]) == 128
+
+    async def test_different_requests_get_different_ids(self, client):
+        r1 = await client.get("/health")
+        r2 = await client.get("/health")
+        assert r1.headers["x-request-id"] != r2.headers["x-request-id"]
