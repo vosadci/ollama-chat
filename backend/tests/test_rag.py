@@ -6,10 +6,12 @@ beyond what is explicitly set up in each test.
 
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 from services.rag import (
+    RAGService,
     _BankHTMLExtractor,
     _mmr_rerank,
     _rrf,
@@ -267,3 +269,52 @@ class TestGetHtmlFiles:
         (sub / "page.html").write_text("<html></html>")
         files = get_html_files(tmp_path)
         assert len(files) == 1
+
+
+# ---------------------------------------------------------------------------
+# RAGService.retrieve() — failure modes
+# ---------------------------------------------------------------------------
+
+class TestRAGServiceRetrieveFailureModes:
+    """retrieve() must always return ([], []) instead of propagating exceptions.
+
+    All I/O is replaced with lightweight mocks — no real Ollama or ChromaDB.
+    """
+
+    @pytest.fixture
+    def rag(self):
+        svc = RAGService()
+        yield svc
+        # Close HTTP clients synchronously (fine for tests that never open them)
+        svc._http_client.close()
+
+    async def test_embedding_failure_returns_empty(self, rag):
+        """When _embed raises, retrieve() degrades gracefully to ([], [])."""
+        mock_col = Mock()
+        mock_col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]]}
+        rag._get_collection = Mock(return_value=mock_col)
+        rag._embed = Mock(side_effect=RuntimeError("Ollama embed endpoint down"))
+
+        result = await rag.retrieve("carduri de debit")
+
+        assert result == ([], [])
+
+    async def test_chromadb_unavailable_returns_empty(self, rag):
+        """When _get_collection raises (ChromaDB not running), returns ([], [])."""
+        rag._get_collection = Mock(side_effect=RuntimeError("ChromaDB not reachable"))
+
+        result = await rag.retrieve("credite")
+
+        assert result == ([], [])
+
+    async def test_empty_collection_returns_empty(self, rag):
+        """An empty ChromaDB collection (no docs indexed) returns ([], [])."""
+        mock_col = Mock()
+        mock_col.query.return_value = {"ids": [[]], "documents": [[]], "metadatas": [[]]}
+        rag._get_collection = Mock(return_value=mock_col)
+        rag._embed = Mock(return_value=[[0.1] * 10])
+        # BM25 index is None by default → BM25 leg is skipped
+
+        result = await rag.retrieve("orice întrebare")
+
+        assert result == ([], [])

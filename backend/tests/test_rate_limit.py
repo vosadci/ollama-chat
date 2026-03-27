@@ -98,3 +98,21 @@ class TestRateLimitDependency:
         client = TestClient(_app)
         resp = client.get("/limited", headers={"X-Forwarded-For": ip})
         assert resp.status_code == 200
+
+    async def test_concurrent_requests_counted_correctly(self):
+        """asyncio.Lock ensures concurrent hits are counted atomically.
+
+        Fire 5 requests simultaneously against a limit-3 endpoint.  Exactly 3
+        must succeed and 2 must be rejected — no races that let extra requests
+        slip through.
+        """
+        _COUNTS.clear()
+        ip = "10.0.0.8"
+        transport = ASGITransport(app=_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as c:
+            responses = await asyncio.gather(
+                *[c.get("/limited", headers={"X-Forwarded-For": ip}) for _ in range(5)]
+            )
+        statuses = [r.status_code for r in responses]
+        assert statuses.count(200) == 3
+        assert statuses.count(429) == 2
