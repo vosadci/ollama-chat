@@ -2,8 +2,8 @@
 
 All tests run against the real app (via ASGI transport — no server needed).
 External dependencies are mocked:
-  - services.rag.retrieve     → returns canned chunks + metadata
-  - services.ollama.stream_chat → yields canned tokens
+  - RAGService.retrieve  → overridden via app.dependency_overrides
+  - services.ollama.stream_chat → patched via unittest.mock
 
 This keeps tests fast and fully offline.
 """
@@ -16,7 +16,9 @@ import pytest_asyncio
 import httpx
 from httpx import ASGITransport
 
+from dependencies import get_rag_service
 from main import app
+from services.rag import RAGService
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +51,27 @@ FAKE_CHUNKS = ["DemoBank offers Visa and Mastercard debit and credit cards."]
 FAKE_META = [{"title": "Carduri", "source": "carduri/carduri-de-debit"}]
 
 
+def _make_mock_rag(chunks=FAKE_CHUNKS, meta=FAKE_META) -> RAGService:
+    """Return a mock RAGService whose retrieve() returns the given canned data."""
+    mock = AsyncMock(spec=RAGService)
+    mock.retrieve = AsyncMock(return_value=(chunks, meta))
+    return mock
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True, scope="session")
+def prime_app_state():
+    """Initialise app.state.rag so the dependency resolver never hits a
+    missing-attribute error on tests that don't set dependency_overrides.
+
+    Tests that need specific retrieve() behaviour override the dependency
+    themselves; this fixture just provides a safe no-op fallback.
+    """
+    app.state.rag = AsyncMock(spec=RAGService)
+
 
 @pytest_asyncio.fixture
 async def client():
@@ -92,12 +112,11 @@ class TestHealth:
 class TestChatStream:
     @pytest.fixture(autouse=True)
     def mock_deps(self):
-        with (
-            patch("routers.chat.retrieve", new_callable=AsyncMock,
-                  return_value=(FAKE_CHUNKS, FAKE_META)) as _retrieve,
-            patch("routers.chat.stream_chat", side_effect=_fake_stream) as _stream,
-        ):
-            yield _retrieve, _stream
+        mock_rag = _make_mock_rag()
+        app.dependency_overrides[get_rag_service] = lambda: mock_rag
+        with patch("routers.chat.stream_chat", side_effect=_fake_stream):
+            yield mock_rag
+        app.dependency_overrides.pop(get_rag_service, None)
 
     async def test_returns_200(self, client):
         r = await client.post(
@@ -144,12 +163,12 @@ class TestChatStream:
 
     async def test_sources_deduplicated(self, client):
         duplicate_meta = FAKE_META * 3  # same source repeated
-        with patch("routers.chat.retrieve", new_callable=AsyncMock,
-                   return_value=(FAKE_CHUNKS, duplicate_meta)):
-            r = await client.post(
-                "/api/v1/chat",
-                json={"messages": [{"role": "user", "content": "Salut"}]},
-            )
+        mock_rag = _make_mock_rag(meta=duplicate_meta)
+        app.dependency_overrides[get_rag_service] = lambda: mock_rag
+        r = await client.post(
+            "/api/v1/chat",
+            json={"messages": [{"role": "user", "content": "Salut"}]},
+        )
         events = parse_sse(r.content)
         source_events = [e for e in events if isinstance(e, dict) and "sources" in e]
         assert len(source_events[0]["sources"]) == 1  # deduped to one
@@ -170,12 +189,12 @@ class TestChatStream:
         assert any(isinstance(e, dict) and "token" in e for e in events)
 
     async def test_no_sources_when_none_returned(self, client):
-        with patch("routers.chat.retrieve", new_callable=AsyncMock,
-                   return_value=([], [])):
-            r = await client.post(
-                "/api/v1/chat",
-                json={"messages": [{"role": "user", "content": "Salut"}]},
-            )
+        mock_rag = _make_mock_rag(chunks=[], meta=[])
+        app.dependency_overrides[get_rag_service] = lambda: mock_rag
+        r = await client.post(
+            "/api/v1/chat",
+            json={"messages": [{"role": "user", "content": "Salut"}]},
+        )
         events = parse_sse(r.content)
         assert not any(isinstance(e, dict) and "sources" in e for e in events)
 
@@ -232,15 +251,17 @@ class TestChatErrorHandling:
             raise RuntimeError("Ollama down")
             yield  # make it an async generator
 
-        with (
-            patch("routers.chat.retrieve", new_callable=AsyncMock,
-                  return_value=([], [])),
-            patch("routers.chat.stream_chat", side_effect=_boom),
-        ):
-            r = await client.post(
-                "/api/v1/chat",
-                json={"messages": [{"role": "user", "content": "Salut"}]},
-            )
+        mock_rag = _make_mock_rag(chunks=[], meta=[])
+        app.dependency_overrides[get_rag_service] = lambda: mock_rag
+        try:
+            with patch("routers.chat.stream_chat", side_effect=_boom):
+                r = await client.post(
+                    "/api/v1/chat",
+                    json={"messages": [{"role": "user", "content": "Salut"}]},
+                )
+        finally:
+            app.dependency_overrides.pop(get_rag_service, None)
+
         assert r.status_code == 200  # SSE: HTTP layer is always 200
         events = parse_sse(r.content)
         error_events = [e for e in events if isinstance(e, dict) and "error" in e]

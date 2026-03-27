@@ -11,13 +11,6 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-_http_client = httpx.Client(timeout=300.0)
-_collection: chromadb.Collection | None = None
-
-# BM25 in-memory index (rebuilt at startup from ChromaDB)
-_bm25: BM25Okapi | None = None
-_bm25_ids: list[str] = []
-
 # Directories to exclude from indexing (language mirrors, asset dirs)
 _EXCLUDED_DIRS = frozenset([
     "en", "ru", "language", "themes", "plugins", "modules", "storage", "combine"
@@ -87,6 +80,10 @@ class _BankHTMLExtractor(HTMLParser):
         return "\n\n".join(self._blocks)
 
 
+# ---------------------------------------------------------------------------
+# Pure functions — stateless, no globals
+# ---------------------------------------------------------------------------
+
 def extract_html_text(path: Path) -> tuple[str, str]:
     """Parse an HTML file and return (title, clean_text). Returns ('', '') on error."""
     try:
@@ -98,10 +95,6 @@ def extract_html_text(path: Path) -> tuple[str, str]:
         logger.warning("Failed to extract text from %s: %s", path, exc)
         return "", ""
 
-
-# ---------------------------------------------------------------------------
-# Chunking
-# ---------------------------------------------------------------------------
 
 def chunk_text(
     text: str,
@@ -140,10 +133,6 @@ def chunk_text(
     return chunks
 
 
-# ---------------------------------------------------------------------------
-# File discovery
-# ---------------------------------------------------------------------------
-
 def get_html_files(data_path: Path) -> list[Path]:
     files = []
     for path in data_path.rglob("*.html"):
@@ -154,71 +143,6 @@ def get_html_files(data_path: Path) -> list[Path]:
     return files
 
 
-# ---------------------------------------------------------------------------
-# Ollama embedding function (ChromaDB interface)
-# ---------------------------------------------------------------------------
-
-class OllamaEmbeddingFunction:
-    """ChromaDB-compatible embedding function using Ollama's /api/embed endpoint."""
-
-    def name(self) -> str:
-        return "ollama"
-
-    def embed_query(self, input: str) -> list[float]:
-        return self([input])[0]
-
-    def __call__(self, input: list[str]) -> list[list[float]]:
-        try:
-            response = _http_client.post(
-                f"{settings.ollama_url}/api/embed",
-                json={"model": settings.embed_model, "input": input},
-            )
-            response.raise_for_status()
-            return response.json()["embeddings"]
-        except Exception as e:
-            raise RuntimeError(f"Embedding failed: {e}") from e
-
-
-# ---------------------------------------------------------------------------
-# ChromaDB collection (singleton)
-# ---------------------------------------------------------------------------
-
-def close_http_client() -> None:
-    _http_client.close()
-
-
-def get_collection() -> chromadb.Collection:
-    global _collection
-    if _collection is not None:
-        return _collection
-    client = chromadb.PersistentClient(path=settings.chroma_path)
-    _collection = client.get_or_create_collection(
-        name=settings.chroma_collection,
-        embedding_function=OllamaEmbeddingFunction(),
-        metadata={"hnsw:space": "cosine"},
-    )
-    return _collection
-
-
-# ---------------------------------------------------------------------------
-# BM25 index
-# ---------------------------------------------------------------------------
-
-def _build_bm25(collection: chromadb.Collection) -> None:
-    global _bm25, _bm25_ids
-    result = collection.get(include=["documents"])
-    docs = result["documents"]
-    ids = result["ids"]
-    tokenised = [doc.lower().split() for doc in docs]
-    _bm25 = BM25Okapi(tokenised)
-    _bm25_ids = ids
-    logger.info("BM25 index built over %d chunks.", len(ids))
-
-
-# ---------------------------------------------------------------------------
-# RRF fusion
-# ---------------------------------------------------------------------------
-
 def _rrf(rankings: list[list[str]], k: int = 60) -> list[str]:
     scores: dict[str, float] = {}
     for ranked_ids in rankings:
@@ -227,10 +151,6 @@ def _rrf(rankings: list[list[str]], k: int = 60) -> list[str]:
     return sorted(scores, key=lambda x: scores[x], reverse=True)
 
 
-# ---------------------------------------------------------------------------
-# MMR reranking
-# ---------------------------------------------------------------------------
-
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
@@ -238,7 +158,7 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 
 def _mmr_rerank(
-    candidates: list[tuple[str, dict, float]],  # (text, metadata, rrf_score)
+    candidates: list[tuple[str, dict, float]],
     query_tokens: set[str],
     top_k: int,
     lam: float,
@@ -271,47 +191,148 @@ def _mmr_rerank(
 
 
 # ---------------------------------------------------------------------------
-# Indexing
+# RAGService — encapsulates all mutable RAG state
 # ---------------------------------------------------------------------------
 
-async def build_index() -> None:
-    global _bm25, _bm25_ids
+class RAGService:
+    """Holds the HTTP client, ChromaDB collection, and BM25 index.
 
-    collection = await asyncio.to_thread(get_collection)
-    count = await asyncio.to_thread(collection.count)
+    Instantiated once at application startup (see main.py lifespan) and
+    injected into route handlers via FastAPI's dependency system.  All
+    mutable state lives on the instance, making concurrent access safe
+    when uvicorn runs a single worker (the default).
+    """
 
-    if count > 0:
-        logger.info("Index already built (%d chunks), rebuilding BM25...", count)
-        await asyncio.to_thread(_build_bm25, collection)
-        return
+    def __init__(self) -> None:
+        self._http_client = httpx.Client(timeout=300.0)
+        self._collection: chromadb.Collection | None = None
+        self._bm25: BM25Okapi | None = None
+        self._bm25_ids: list[str] = []
 
-    data_path = Path(settings.data_path)
-    files = get_html_files(data_path)
-    logger.info("Indexing %d HTML files...", len(files))
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
-    batch_docs: list[str] = []
-    batch_meta: list[dict] = []
-    batch_ids: list[str] = []
-    total_chunks = 0
+    def close(self) -> None:
+        """Close the shared HTTP client. Call from the lifespan shutdown hook."""
+        self._http_client.close()
 
-    for i, path in enumerate(files):
-        title, text = extract_html_text(path)
-        if len(text) < 200:
-            continue
+    # ------------------------------------------------------------------
+    # Embedding (ChromaDB-compatible interface)
+    # ------------------------------------------------------------------
 
-        rel = str(path.relative_to(data_path))
-        chunks = chunk_text(
-            text, rel, title,
-            settings.rag_chunk_size,
-            settings.rag_chunk_overlap,
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        """Call Ollama's /api/embed endpoint and return dense vectors."""
+        try:
+            response = self._http_client.post(
+                f"{settings.ollama_url}/api/embed",
+                json={"model": settings.embed_model, "input": texts},
+            )
+            response.raise_for_status()
+            return response.json()["embeddings"]
+        except Exception as exc:
+            raise RuntimeError(f"Embedding failed: {exc}") from exc
+
+    def _embedding_function(self) -> "RAGService._EmbeddingCallable":
+        """Return a ChromaDB-compatible embedding callable backed by this service."""
+        return RAGService._EmbeddingCallable(self)
+
+    class _EmbeddingCallable:
+        """Thin ChromaDB adapter that delegates to RAGService._embed."""
+
+        def __init__(self, service: "RAGService") -> None:
+            self._service = service
+
+        def name(self) -> str:
+            return "ollama"
+
+        def embed_query(self, input: str) -> list[float]:
+            return self([input])[0]
+
+        def __call__(self, input: list[str]) -> list[list[float]]:
+            return self._service._embed(input)
+
+    # ------------------------------------------------------------------
+    # ChromaDB collection
+    # ------------------------------------------------------------------
+
+    def _get_collection(self) -> chromadb.Collection:
+        if self._collection is not None:
+            return self._collection
+        client = chromadb.PersistentClient(path=settings.chroma_path)
+        self._collection = client.get_or_create_collection(
+            name=settings.chroma_collection,
+            embedding_function=self._embedding_function(),
+            metadata={"hnsw:space": "cosine"},
         )
+        return self._collection
 
-        for chunk in chunks:
-            batch_docs.append(chunk["text"])
-            batch_meta.append({"source": chunk["source"], "title": chunk["title"]})
-            batch_ids.append(f"{rel}_{chunk['chunk_index']}")
+    # ------------------------------------------------------------------
+    # BM25 index
+    # ------------------------------------------------------------------
 
-        if len(batch_ids) >= 100:
+    def _build_bm25(self, collection: chromadb.Collection) -> None:
+        result = collection.get(include=["documents"])
+        docs = result["documents"]
+        ids = result["ids"]
+        tokenised = [doc.lower().split() for doc in docs]
+        self._bm25 = BM25Okapi(tokenised)
+        self._bm25_ids = ids
+        logger.info("BM25 index built over %d chunks.", len(ids))
+
+    # ------------------------------------------------------------------
+    # Indexing
+    # ------------------------------------------------------------------
+
+    async def build_index(self) -> None:
+        collection = await asyncio.to_thread(self._get_collection)
+        count = await asyncio.to_thread(collection.count)
+
+        if count > 0:
+            logger.info("Index already built (%d chunks), rebuilding BM25...", count)
+            await asyncio.to_thread(self._build_bm25, collection)
+            return
+
+        data_path = Path(settings.data_path)
+        files = get_html_files(data_path)
+        logger.info("Indexing %d HTML files...", len(files))
+
+        batch_docs: list[str] = []
+        batch_meta: list[dict] = []
+        batch_ids: list[str] = []
+        total_chunks = 0
+
+        for i, path in enumerate(files):
+            title, text = extract_html_text(path)
+            if len(text) < 200:
+                continue
+
+            rel = str(path.relative_to(data_path))
+            chunks = chunk_text(
+                text, rel, title,
+                settings.rag_chunk_size,
+                settings.rag_chunk_overlap,
+            )
+
+            for chunk in chunks:
+                batch_docs.append(chunk["text"])
+                batch_meta.append({"source": chunk["source"], "title": chunk["title"]})
+                batch_ids.append(f"{rel}_{chunk['chunk_index']}")
+
+            if len(batch_ids) >= 100:
+                await asyncio.to_thread(
+                    collection.upsert,
+                    documents=batch_docs,
+                    metadatas=batch_meta,
+                    ids=batch_ids,
+                )
+                total_chunks += len(batch_ids)
+                batch_docs, batch_meta, batch_ids = [], [], []
+
+            if (i + 1) % 50 == 0:
+                logger.info("  Processed %d / %d files...", i + 1, len(files))
+
+        if batch_ids:
             await asyncio.to_thread(
                 collection.upsert,
                 documents=batch_docs,
@@ -319,91 +340,76 @@ async def build_index() -> None:
                 ids=batch_ids,
             )
             total_chunks += len(batch_ids)
-            batch_docs, batch_meta, batch_ids = [], [], []
 
-        if (i + 1) % 50 == 0:
-            logger.info("  Processed %d / %d files...", i + 1, len(files))
+        logger.info("Index complete: %d chunks from %d files.", total_chunks, len(files))
+        await asyncio.to_thread(self._build_bm25, collection)
 
-    if batch_ids:
-        await asyncio.to_thread(
-            collection.upsert,
-            documents=batch_docs,
-            metadatas=batch_meta,
-            ids=batch_ids,
-        )
-        total_chunks += len(batch_ids)
+    # ------------------------------------------------------------------
+    # Retrieval (hybrid: semantic + BM25 + RRF + MMR)
+    # ------------------------------------------------------------------
 
-    logger.info("Index complete: %d chunks from %d files.", total_chunks, len(files))
-    await asyncio.to_thread(_build_bm25, collection)
+    async def retrieve(self, query: str) -> tuple[list[str], list[dict]]:
+        """Return (texts, metadatas) for the top-k most relevant chunks."""
+        try:
+            collection = await asyncio.to_thread(self._get_collection)
 
-
-# ---------------------------------------------------------------------------
-# Retrieval (hybrid: semantic + BM25 + RRF + MMR)
-# ---------------------------------------------------------------------------
-
-async def retrieve(query: str) -> tuple[list[str], list[dict]]:
-    """Return (texts, metadatas) for the top-k most relevant chunks."""
-    try:
-        collection = await asyncio.to_thread(get_collection)
-
-        # --- Semantic retrieval ---
-        ef = OllamaEmbeddingFunction()
-        embeddings = await asyncio.to_thread(ef, [query])
-        sem_results = await asyncio.to_thread(
-            collection.query,
-            query_embeddings=embeddings,
-            n_results=settings.rag_semantic_candidates,
-            include=["documents", "metadatas"],
-        )
-        sem_ids: list[str] = sem_results["ids"][0]
-        sem_docs: list[str] = sem_results["documents"][0]
-        sem_meta: list[dict] = sem_results["metadatas"][0]
-
-        # --- BM25 retrieval ---
-        bm25_ids: list[str] = []
-        if _bm25 is not None and _bm25_ids:
-            query_tokens = query.lower().split()
-            scores = _bm25.get_scores(query_tokens)
-            top_indices = sorted(
-                range(len(scores)), key=lambda i: scores[i], reverse=True
-            )[:settings.rag_bm25_candidates]
-            bm25_ids = [_bm25_ids[i] for i in top_indices]
-
-        # --- RRF fusion ---
-        fused_ids = _rrf([sem_ids, bm25_ids]) if bm25_ids else sem_ids
-
-        # Build a lookup from what we already have (semantic results)
-        id_to_doc = dict(zip(sem_ids, sem_docs))
-        id_to_meta = dict(zip(sem_ids, sem_meta))
-
-        # Fetch any BM25-only IDs not already in semantic results
-        missing = [i for i in fused_ids[:settings.rag_top_k * 2] if i not in id_to_doc]
-        if missing:
-            extra = await asyncio.to_thread(
-                collection.get,
-                ids=missing,
+            # --- Semantic retrieval ---
+            embeddings = await asyncio.to_thread(self._embed, [query])
+            sem_results = await asyncio.to_thread(
+                collection.query,
+                query_embeddings=embeddings,
+                n_results=settings.rag_semantic_candidates,
                 include=["documents", "metadatas"],
             )
-            for doc_id, doc, meta in zip(extra["ids"], extra["documents"], extra["metadatas"]):
-                id_to_doc[doc_id] = doc
-                id_to_meta[doc_id] = meta
+            sem_ids: list[str] = sem_results["ids"][0]
+            sem_docs: list[str] = sem_results["documents"][0]
+            sem_meta: list[dict] = sem_results["metadatas"][0]
 
-        # Build candidates list (text, metadata, rrf_score) in fused order
-        rrf_scores = {doc_id: 1.0 / (i + 1) for i, doc_id in enumerate(fused_ids)}
-        candidates = [
-            (id_to_doc[doc_id], id_to_meta[doc_id], rrf_scores[doc_id])
-            for doc_id in fused_ids
-            if doc_id in id_to_doc
-        ][:settings.rag_top_k * 3]
+            # --- BM25 retrieval ---
+            bm25_ids: list[str] = []
+            if self._bm25 is not None and self._bm25_ids:
+                query_tokens = query.lower().split()
+                scores = self._bm25.get_scores(query_tokens)
+                top_indices = sorted(
+                    range(len(scores)), key=lambda i: scores[i], reverse=True
+                )[:settings.rag_bm25_candidates]
+                bm25_ids = [self._bm25_ids[i] for i in top_indices]
 
-        # --- MMR reranking ---
-        query_tokens_set = set(query.lower().split())
-        reranked = _mmr_rerank(candidates, query_tokens_set, settings.rag_top_k, settings.rag_mmr_lambda)
+            # --- RRF fusion ---
+            fused_ids = _rrf([sem_ids, bm25_ids]) if bm25_ids else sem_ids
 
-        texts = [t for t, _ in reranked]
-        metadatas = [m for _, m in reranked]
-        return texts, metadatas
+            # Build a lookup from what we already have (semantic results)
+            id_to_doc = dict(zip(sem_ids, sem_docs))
+            id_to_meta = dict(zip(sem_ids, sem_meta))
 
-    except Exception as e:
-        logger.warning("RAG retrieval failed: %s", e)
-        return [], []
+            # Fetch any BM25-only IDs not already in semantic results
+            missing = [i for i in fused_ids[:settings.rag_top_k * 2] if i not in id_to_doc]
+            if missing:
+                extra = await asyncio.to_thread(
+                    collection.get,
+                    ids=missing,
+                    include=["documents", "metadatas"],
+                )
+                for doc_id, doc, meta in zip(extra["ids"], extra["documents"], extra["metadatas"]):
+                    id_to_doc[doc_id] = doc
+                    id_to_meta[doc_id] = meta
+
+            # Build candidates list (text, metadata, rrf_score) in fused order
+            rrf_scores = {doc_id: 1.0 / (i + 1) for i, doc_id in enumerate(fused_ids)}
+            candidates = [
+                (id_to_doc[doc_id], id_to_meta[doc_id], rrf_scores[doc_id])
+                for doc_id in fused_ids
+                if doc_id in id_to_doc
+            ][:settings.rag_top_k * 3]
+
+            # --- MMR reranking ---
+            query_tokens_set = set(query.lower().split())
+            reranked = _mmr_rerank(candidates, query_tokens_set, settings.rag_top_k, settings.rag_mmr_lambda)
+
+            texts = [t for t, _ in reranked]
+            metadatas = [m for _, m in reranked]
+            return texts, metadatas
+
+        except Exception as exc:
+            logger.warning("RAG retrieval failed: %s", exc)
+            return [], []

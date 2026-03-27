@@ -2,12 +2,13 @@ import json
 import logging
 from typing import AsyncIterator, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from dependencies import get_rag_service
 from services.ollama import stream_chat
-from services.rag import retrieve
+from services.rag import RAGService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ async def event_generator(
         422: {"description": "Validation error (e.g. content too long, invalid role)."},
     },
 )
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, rag: RAGService = Depends(get_rag_service)):
     """
     Send a conversation history and receive a streaming response.
 
@@ -91,7 +92,7 @@ async def chat(request: ChatRequest):
         (m.content for m in reversed(request.messages) if m.role == "user"),
         "",
     )
-    context_chunks, context_meta = await retrieve(user_query) if user_query else ([], [])
+    context_chunks, context_meta = await rag.retrieve(user_query) if user_query else ([], [])
 
     return StreamingResponse(
         event_generator(messages, context_chunks, context_meta),

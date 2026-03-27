@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from routers.chat import router as chat_router
-from services.rag import build_index, close_http_client
+from services.rag import RAGService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,9 +62,11 @@ def _validate_config() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_config()
-    await build_index()
+    rag = RAGService()
+    app.state.rag = rag
+    await rag.build_index()
     yield
-    close_http_client()
+    rag.close()
 
 
 app = FastAPI(
