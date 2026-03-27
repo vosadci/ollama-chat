@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import uvicorn
@@ -17,7 +18,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _validate_config() -> None:
+def _check_ollama_sync() -> None:
+    """Blocking connectivity probe — intended to run inside asyncio.to_thread."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"{settings.ollama_url}/api/tags")
+            resp.raise_for_status()
+        logger.info("Ollama reachable at %s", settings.ollama_url)
+    except Exception as exc:
+        logger.warning(
+            "Ollama not reachable at %s: %s — will retry on first request.",
+            settings.ollama_url,
+            exc,
+        )
+
+
+async def _validate_config() -> None:
     """Fail fast on obvious misconfigurations before starting the server.
 
     Fatal conditions (raise RuntimeError):
@@ -47,22 +63,13 @@ def _validate_config() -> None:
         )
 
     # --- OLLAMA_URL reachability (non-fatal: Ollama may still be starting) ---
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            resp = client.get(f"{settings.ollama_url}/api/tags")
-            resp.raise_for_status()
-        logger.info("Ollama reachable at %s", settings.ollama_url)
-    except Exception as exc:
-        logger.warning(
-            "Ollama not reachable at %s: %s — will retry on first request.",
-            settings.ollama_url,
-            exc,
-        )
+    # Run the blocking httpx call off the event loop to avoid stalling uvicorn.
+    await asyncio.to_thread(_check_ollama_sync)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _validate_config()
+    await _validate_config()
     rag = RAGService()
     app.state.rag = rag
     await rag.build_index()
