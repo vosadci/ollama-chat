@@ -258,6 +258,7 @@ class _ChatScreenState extends State<ChatScreen> {
       floatingActionButton: _atBottom
           ? null
           : FloatingActionButton.small(
+              tooltip: 'Scroll to bottom',
               onPressed: _scrollToBottom,
               child: const Icon(Icons.keyboard_arrow_down),
             ),
@@ -296,27 +297,37 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.chat_bubble_outline,
-                size: 64, color: Colors.grey.shade300),
+            // Decorative icon — excluded from the a11y tree.
+            ExcludeSemantics(
+              child: Icon(Icons.chat_bubble_outline,
+                  size: 64, color: Colors.grey.shade300),
+            ),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Start a conversation',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+              style: TextStyle(color: Colors.grey, fontSize: 16),
             ),
             const SizedBox(height: 24),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _suggestions.map((q) {
-                return ActionChip(
-                  label: Text(q),
-                  onPressed: () {
-                    _controller.text = q;
-                    _send();
-                  },
-                );
-              }).toList(),
+            Semantics(
+              label: 'Suggested questions',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: _suggestions.map((q) {
+                  return Semantics(
+                    button: true,
+                    label: 'Ask: $q',
+                    child: ActionChip(
+                      label: Text(q),
+                      onPressed: () {
+                        _controller.text = q;
+                        _send();
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),

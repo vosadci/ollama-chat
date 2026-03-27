@@ -62,7 +62,10 @@ class _InputBarState extends State<InputBar> {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
+              child: Semantics(
+                label: 'Message input',
+                textField: true,
+                child: TextField(
                 controller: widget.controller,
                 focusNode: _focusNode,
                 minLines: 1,
@@ -83,6 +86,7 @@ class _InputBarState extends State<InputBar> {
                   ),
                 ),
               ),
+              ),
             ),
             const SizedBox(width: 8),
             AnimatedSwitcher(
@@ -90,11 +94,13 @@ class _InputBarState extends State<InputBar> {
               child: widget.isLoading
                   ? IconButton.filled(
                       key: const ValueKey('stop'),
+                      tooltip: 'Stop response',
                       onPressed: widget.onStop,
                       icon: const Icon(Icons.stop_rounded),
                     )
                   : IconButton.filled(
                       key: const ValueKey('send'),
+                      tooltip: 'Send message',
                       onPressed: _isEmpty
                           ? null
                           : () {

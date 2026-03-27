@@ -22,7 +22,11 @@ class MessageBubble extends StatelessWidget {
     final contentColor =
         isUser ? colorScheme.onPrimaryContainer : colorScheme.onSurface;
 
-    final bubble = Align(
+    final roleLabel = isUser ? 'You' : 'Assistant';
+    final bubble = Semantics(
+      // Announce role + content so screen readers describe each bubble.
+      label: '$roleLabel: ${message.content.isEmpty ? (message.isStreaming ? 'typing' : '') : message.content}',
+      child: Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         key: Key('msg-${message.id}'),
@@ -110,20 +114,24 @@ class MessageBubble extends StatelessWidget {
                 ),
                 if (!isUser && !message.isStreaming) ...[
                   const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: message.content));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Copied'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: Icon(
-                      Icons.copy_outlined,
-                      size: 12,
-                      color: contentColor.withValues(alpha: 0.35),
+                  Semantics(
+                    button: true,
+                    label: 'Copy message to clipboard',
+                    child: GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: message.content));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Copied'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: Icon(
+                        Icons.copy_outlined,
+                        size: 12,
+                        color: contentColor.withValues(alpha: 0.35),
+                      ),
                     ),
                   ),
                 ],
@@ -152,6 +160,7 @@ class MessageBubble extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
     );
 
@@ -212,14 +221,24 @@ class _SourceChip extends StatelessWidget {
       ),
     );
 
-    if (url == null) return chip;
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => openUrl(url!),
-        behavior: HitTestBehavior.opaque,
+    if (url == null) {
+      return Semantics(
+        label: 'Source: $title',
         child: chip,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      link: true,
+      label: 'Source: $title. Tap to open.',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => openUrl(url!),
+          behavior: HitTestBehavior.opaque,
+          child: chip,
+        ),
       ),
     );
   }
