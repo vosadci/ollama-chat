@@ -6,6 +6,10 @@ class Settings(BaseSettings):
     model: str = "llama3.1:8b"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Comma-separated list of allowed CORS origins.
+    # Use "*" only for fully local/private deployments.
+    # Example: CORS_ORIGINS=http://localhost:3000,https://chat.example.com
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8080"]
 
     embed_model: str = "nomic-embed-text"
     chroma_path: str = "./chroma_db"

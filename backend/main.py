@@ -48,7 +48,7 @@ Each event is a JSON object on a `data:` line followed by a blank line:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
