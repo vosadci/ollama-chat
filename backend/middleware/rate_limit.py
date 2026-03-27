@@ -21,7 +21,7 @@ from fastapi import Request, HTTPException
 
 _WINDOW_SECONDS = 60       # rolling window length
 _DEFAULT_LIMIT = 10        # max requests per IP per window
-_MAX_LEN = 10              # max IP length accepted from forwarded headers (safety)
+_MAX_IP_LEN = 64           # max IP string length accepted from forwarded headers (safety)
 
 # Global in-process store — safe for a single-worker uvicorn deployment.
 # Keys are client IP strings; values are deques of monotonic timestamps.
@@ -90,7 +90,7 @@ def _client_ip(request: Request) -> str:
     # Trust X-Forwarded-For only for the first token (edge sets it).
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
+        return forwarded.split(",")[0].strip()[:_MAX_IP_LEN]
     if request.client:
         return request.client.host
     return "unknown"

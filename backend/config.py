@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -50,6 +50,16 @@ class Settings(BaseSettings):
         if v < 0:
             raise ValueError(f"rag_chunk_overlap must be non-negative, got {v}")
         return v
+
+    @model_validator(mode="after")
+    def _overlap_less_than_chunk_size(self) -> "Settings":
+        if self.rag_chunk_overlap >= self.rag_chunk_size:
+            raise ValueError(
+                f"rag_chunk_overlap ({self.rag_chunk_overlap}) must be less than "
+                f"rag_chunk_size ({self.rag_chunk_size}); otherwise chunk_text() "
+                "would loop forever."
+            )
+        return self
 
     # System prompt prepended to every chat request when RAG context is present.
     # Override in .env or via SYSTEM_PROMPT environment variable.

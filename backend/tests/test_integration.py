@@ -58,8 +58,8 @@ class TestLiveHealth:
         assert r.status_code == 200
 
     async def test_health_model_present(self, live_client):
-        body = r = await live_client.get("/health")
-        assert "model" in body.json()
+        r = await live_client.get("/health")
+        assert "model" in r.json()
 
 
 # ---------------------------------------------------------------------------

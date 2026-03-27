@@ -45,7 +45,7 @@ The app comes with sample HTML documents in `backend/data/sample/` so it works o
 | `make build` | Rebuild images without cache |
 | `make dev` | Run backend natively with hot reload |
 | `make dev-web` | Run Flutter web in Chrome (hot reload, connects to local backend) |
-| `make test` | Run all tests — backend unit (71) + frontend (67) |
+| `make test` | Run all tests — backend unit (90) + frontend (67) |
 | `make test-backend` | Backend unit tests only — fully offline, ~1s |
 | `make test-frontend` | Flutter widget tests only — fully offline, ~3s |
 | `make e2e` | End-to-end tests in visible macOS window against the live backend |
@@ -75,7 +75,7 @@ cd frontend && flutter run -d "iPhone 17 Pro Max" --no-enable-impeller
 
 ```bash
 make test           # all offline tests (backend unit + Flutter widgets, ~5s)
-make test-backend   # 71 backend unit tests: RAG pipeline, API, rate limiter
+make test-backend   # 90 backend unit tests: RAG pipeline, API, config, rate limiter
                     # +12 integration tests (auto-skipped unless OLLAMA_URL is set)
 make test-frontend  # 67 Flutter widget tests: model, services, ChatScreen flows
 ```

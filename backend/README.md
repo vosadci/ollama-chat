@@ -121,7 +121,7 @@ Streams a chat response as Server-Sent Events.
 
 ```bash
 source .venv/bin/activate
-pytest           # 71 unit tests (offline) + 12 integration tests (skipped by default)
+pytest           # 90 unit tests (offline) + 12 integration tests (skipped by default)
 pytest -v        # verbose output
 ```
 
@@ -129,9 +129,10 @@ Unit tests are fully offline — no Ollama, no ChromaDB, no running server requi
 
 | File | What it tests |
 |---|---|
-| `tests/test_rag.py` | RAG pipeline: HTML extraction, chunking, BM25, RRF, MMR (37 tests) |
-| `tests/test_api.py` | API endpoints: SSE stream, input validation, error handling, OpenAPI schema, X-Request-ID middleware (28 tests) |
-| `tests/test_rate_limit.py` | Rate limiter: per-IP windowed counting, 429 response shape, expiry (6 tests) |
+| `tests/test_config.py` | Pydantic settings validators: field ranges, cross-field overlap < chunk_size (12 tests) |
+| `tests/test_rag.py` | RAG pipeline: HTML extraction, chunking, BM25, RRF, MMR, retrieve failure modes (40 tests) |
+| `tests/test_api.py` | API endpoints: SSE stream, input validation, error handling, config, OpenAPI schema, X-Request-ID middleware (31 tests) |
+| `tests/test_rate_limit.py` | Rate limiter: per-IP windowed counting, 429 response shape, expiry, concurrent safety (7 tests) |
 | `tests/test_integration.py` | Full-stack: health, live SSE chat, RAG retrieve, multi-turn (12 tests — skipped unless `OLLAMA_URL` is set) |
 
 API tests use `httpx.AsyncClient` with `ASGITransport` — the app is tested in-process without starting a server. External dependencies (Ollama, ChromaDB) are mocked via `app.dependency_overrides`.
