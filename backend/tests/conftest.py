@@ -7,6 +7,21 @@ import pytest
 # Make sure the backend package root is on the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from middleware.rate_limit import _COUNTS as _rate_counts
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limit_state():
+    """Reset the in-process rate-limiter counters before every test.
+
+    Without this, tests that exercise the chat endpoint share a global
+    counter and can trip the 10-req/min limit when the test suite runs
+    sequentially from the same fake IP.
+    """
+    _rate_counts.clear()
+    yield
+    _rate_counts.clear()
+
 
 def pytest_configure(config):
     """Register the 'integration' custom marker."""

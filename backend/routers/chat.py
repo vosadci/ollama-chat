@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from dependencies import get_rag_service
+from middleware.rate_limit import rate_limit
 from services.ollama import stream_chat
 from services.rag import RAGService
 
@@ -76,7 +77,11 @@ async def event_generator(
         422: {"description": "Validation error (e.g. content too long, invalid role)."},
     },
 )
-async def chat(request: ChatRequest, rag: RAGService = Depends(get_rag_service)):
+async def chat(
+    request: ChatRequest,
+    rag: RAGService = Depends(get_rag_service),
+    _rate: None = Depends(rate_limit()),  # 10 req / 60 s per IP
+):
     """
     Send a conversation history and receive a streaming response.
 
