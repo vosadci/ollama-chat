@@ -1,4 +1,4 @@
-.PHONY: help setup run stop logs build dev dev-web test test-backend test-frontend e2e clean
+.PHONY: help setup run stop logs build dev dev-web test test-backend test-frontend e2e clean lock
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -24,7 +24,8 @@ help:
 	@echo "  make test-frontend  Run Flutter widget tests only (offline, ~3s)"
 	@echo "  make e2e            Run end-to-end tests in a desktop window (requires backend running)"
 	@echo ""
-	@echo "  make clean          Remove containers and local images"
+	@echo "  make clean          Remove containers and local images
+  make lock           Regenerate backend/requirements.lock via pip-compile"
 
 setup:
 	@[ -f .env ] && echo ".env already exists" || (cp .env.example .env && echo "Created .env from .env.example")
@@ -74,3 +75,11 @@ e2e:
 clean:
 	docker compose down --rmi local
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
+
+# Regenerate the pinned lock file. Run this after editing requirements.txt,
+# or to update to newer patch versions. Requires pip-tools (pip install pip-tools).
+# Must be run with the same Python version as the backend (3.11).
+lock:
+	pip-compile --generate-hashes \
+	  --output-file backend/requirements.lock \
+	  backend/requirements.txt
