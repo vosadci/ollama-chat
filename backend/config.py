@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # Example: DATA_EXCLUDED_DIRS=en,ru,themes,plugins
     data_excluded_dirs: str = "en,ru,language,themes,plugins,modules,storage,combine"
 
+    # Path for the persisted BM25 index (relative to the working directory or absolute).
+    # Stored alongside the ChromaDB data so both survive container restarts.
+    bm25_cache_path: str = "./chroma_db/bm25_index.pkl"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

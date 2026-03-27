@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pickle
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -284,6 +285,36 @@ class RAGService:
     # BM25 index
     # ------------------------------------------------------------------
 
+    def _bm25_cache_path(self) -> Path:
+        return Path(settings.bm25_cache_path)
+
+    def _load_bm25_from_cache(self) -> bool:
+        """Load a previously serialised BM25 index. Returns True on success."""
+        cache = self._bm25_cache_path()
+        if not cache.exists():
+            return False
+        try:
+            with cache.open("rb") as fh:
+                data = pickle.load(fh)
+            self._bm25 = data["bm25"]
+            self._bm25_ids = data["ids"]
+            logger.info("BM25 index loaded from cache (%d chunks).", len(self._bm25_ids))
+            return True
+        except Exception as exc:
+            logger.warning("Failed to load BM25 cache: %s — will rebuild.", exc)
+            return False
+
+    def _save_bm25_to_cache(self) -> None:
+        """Serialise the current BM25 index to disk for fast cold-start reuse."""
+        cache = self._bm25_cache_path()
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            with cache.open("wb") as fh:
+                pickle.dump({"bm25": self._bm25, "ids": self._bm25_ids}, fh)
+            logger.info("BM25 index saved to cache (%s).", cache)
+        except Exception as exc:
+            logger.warning("Failed to save BM25 cache: %s", exc)
+
     def _build_bm25(self, collection: chromadb.Collection) -> None:
         result = collection.get(include=["documents"])
         docs = result["documents"]
@@ -292,6 +323,7 @@ class RAGService:
         self._bm25 = BM25Okapi(tokenised)
         self._bm25_ids = ids
         logger.info("BM25 index built over %d chunks.", len(ids))
+        self._save_bm25_to_cache()
 
     # ------------------------------------------------------------------
     # Indexing
@@ -302,8 +334,13 @@ class RAGService:
         count = await asyncio.to_thread(collection.count)
 
         if count > 0:
-            logger.info("Index already built (%d chunks), rebuilding BM25...", count)
-            await asyncio.to_thread(self._build_bm25, collection)
+            logger.info("Index already built (%d chunks), loading BM25 cache...", count)
+            # Try fast path: load persisted index from disk.
+            loaded = await asyncio.to_thread(self._load_bm25_from_cache)
+            if not loaded:
+                # Cache missing or corrupt — rebuild and re-save.
+                logger.info("BM25 cache miss — rebuilding from ChromaDB.")
+                await asyncio.to_thread(self._build_bm25, collection)
             return
 
         data_path = Path(settings.data_path)
