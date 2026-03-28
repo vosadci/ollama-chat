@@ -23,12 +23,12 @@ from services.rag import RAGService
 
 async def _fake_stream(*_args, **_kwargs):
     """Async generator that yields three tokens."""
-    for token in ["Bună", " ziua", "!"]:
+    for token in ["Hello", " there", "!"]:
         yield token
 
 
-FAKE_CHUNKS = ["DemoBank offers Visa and Mastercard debit and credit cards."]
-FAKE_META = [{"title": "Carduri", "source": "carduri/carduri-de-debit"}]
+FAKE_CHUNKS = ["Nexus offers three pricing tiers: Free, Pro ($12/member/month), and Enterprise."]
+FAKE_META = [{"title": "Pricing", "source": "pricing/overview"}]
 
 
 def _make_mock_rag(chunks=FAKE_CHUNKS, meta=FAKE_META) -> RAGService:
@@ -104,30 +104,30 @@ class TestChatStream:
     async def test_returns_200(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         assert r.status_code == 200
 
     async def test_content_type_event_stream(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         assert "text/event-stream" in r.headers["content-type"]
 
     async def test_stream_contains_tokens(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         events = parse_sse(r.content)
         tokens = [e["token"] for e in events if isinstance(e, dict) and "token" in e]
-        assert tokens == ["Bună", " ziua", "!"]
+        assert tokens == ["Hello", " there", "!"]
 
     async def test_stream_ends_with_done(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         events = parse_sse(r.content)
         assert events[-1] == "[DONE]"
@@ -135,14 +135,14 @@ class TestChatStream:
     async def test_stream_contains_sources(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         events = parse_sse(r.content)
         source_events = [e for e in events if isinstance(e, dict) and "sources" in e]
         assert len(source_events) == 1
         sources = source_events[0]["sources"]
-        assert sources[0]["title"] == "Carduri"
-        assert sources[0]["source"] == "carduri/carduri-de-debit"
+        assert sources[0]["title"] == "Pricing"
+        assert sources[0]["source"] == "pricing/overview"
 
     async def test_sources_deduplicated(self, client):
         duplicate_meta = FAKE_META * 3  # same source repeated
@@ -150,7 +150,7 @@ class TestChatStream:
         app.dependency_overrides[get_rag_service] = lambda: mock_rag
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         events = parse_sse(r.content)
         source_events = [e for e in events if isinstance(e, dict) and "sources" in e]
@@ -161,9 +161,9 @@ class TestChatStream:
             "/api/v1/chat",
             json={
                 "messages": [
-                    {"role": "user", "content": "What services do you offer?"},
-                    {"role": "assistant", "content": "O bancă."},
-                    {"role": "user", "content": "Ce carduri oferă?"},
+                    {"role": "user", "content": "What plans do you offer?"},
+                    {"role": "assistant", "content": "We offer Free, Pro, and Enterprise plans."},
+                    {"role": "user", "content": "What features does Pro include?"},
                 ]
             },
         )
@@ -176,7 +176,7 @@ class TestChatStream:
         app.dependency_overrides[get_rag_service] = lambda: mock_rag
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"role": "user", "content": "Salut"}]},
+            json={"messages": [{"role": "user", "content": "Hello"}]},
         )
         events = parse_sse(r.content)
         assert not any(isinstance(e, dict) and "sources" in e for e in events)
@@ -212,7 +212,7 @@ class TestChatValidation:
     async def test_missing_role_returns_422(self, client):
         r = await client.post(
             "/api/v1/chat",
-            json={"messages": [{"content": "Salut"}]},
+            json={"messages": [{"content": "Hello"}]},
         )
         assert r.status_code == 422
 
@@ -240,7 +240,7 @@ class TestChatErrorHandling:
             with patch("routers.chat.stream_chat", side_effect=_boom):
                 r = await client.post(
                     "/api/v1/chat",
-                    json={"messages": [{"role": "user", "content": "Salut"}]},
+                    json={"messages": [{"role": "user", "content": "Hello"}]},
                 )
         finally:
             app.dependency_overrides.pop(get_rag_service, None)

@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "messages": [
-                    {"role": "user", "content": "Ce carduri oferă Victoriabank?"}
+                    {"role": "user", "content": "What features does the Pro plan include?"}
                 ]
             }
         }

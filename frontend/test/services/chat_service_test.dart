@@ -130,8 +130,8 @@ void main() {
   group('ChatService — sources event', () {
     test('delivers parsed sources list', () async {
       final sourcesPayload = [
-        {'title': 'Carduri', 'source': 'carduri/debit'},
-        {'title': 'Conturi', 'source': 'conturi/curent'},
+        {'title': 'Features', 'source': 'docs/features'},
+        {'title': 'Pricing', 'source': 'docs/pricing'},
       ];
       final service = _serviceWith([
         jsonEncode({'sources': sourcesPayload}),
@@ -141,8 +141,8 @@ void main() {
       final result = await _collect(service);
 
       expect(result.sources.length, 1);
-      expect(result.sources[0][0]['title'], 'Carduri');
-      expect(result.sources[0][1]['source'], 'conturi/curent');
+      expect(result.sources[0][0]['title'], 'Features');
+      expect(result.sources[0][1]['source'], 'docs/pricing');
     });
 
     test('can receive tokens and sources in the same stream', () async {

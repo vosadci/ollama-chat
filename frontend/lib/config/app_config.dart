@@ -15,10 +15,10 @@ library;
 ///
 /// Override at build time with --dart-define=SUGGESTION_CHIPS="q1|q2|q3".
 const List<String> defaultSuggestions = [
-  'What types of accounts are available?',
-  'Tell me about card options.',
-  'What loan products are offered?',
-  'How do I open an account?',
+  'What features are included in the Pro plan?',
+  'How do I get started?',
+  'What integrations are supported?',
+  'How is my data kept secure?',
 ];
 
 /// Suggestion chips resolved from the compile-time environment.

@@ -85,11 +85,11 @@ void main() {
         timestamp: timestamp,
       );
       final updated = msg.copyWith(sources: [
-        {'title': 'Credite', 'source': 'credite.html'},
-        {'title': 'Carduri', 'source': 'carduri.html'},
+        {'title': 'Pricing', 'source': 'pricing.html'},
+        {'title': 'Features', 'source': 'features.html'},
       ]);
       expect(updated.sources.length, 2);
-      expect(updated.sources[0]['title'], 'Credite');
+      expect(updated.sources[0]['title'], 'Pricing');
       // Original is unchanged
       expect(msg.sources, isEmpty);
     });

@@ -120,13 +120,13 @@ void main() {
 
   group('Sending a message', () {
     testWidgets('user bubble appears after sending', (tester) async {
-      _stubTokens(mock, ['Hello']);
+      _stubTokens(mock, ['Got it']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
-      expect(find.text('Salut'), findsOneWidget);
+      expect(find.text('Hello'), findsOneWidget);
     });
 
     testWidgets('input field is cleared after sending', (tester) async {
@@ -144,7 +144,7 @@ void main() {
       _stubTokens(mock, []);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Ce carduri aveți?');
+      await _sendMessage(tester, 'What features are included?');
       await tester.pumpAndSettle();
 
       final captured = verify(
@@ -159,7 +159,7 @@ void main() {
 
       final messages = captured.first as List<Map<String, String>>;
       expect(messages.last['role'], 'user');
-      expect(messages.last['content'], 'Ce carduri aveți?');
+      expect(messages.last['content'], 'What features are included?');
     });
   });
 
@@ -169,20 +169,20 @@ void main() {
 
   group('Streaming response', () {
     testWidgets('tokens accumulate in assistant bubble', (tester) async {
-      _stubTokens(mock, ['Bună', ' ziua', '!']);
+      _stubTokens(mock, ['Hello', ' there', '!']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
-      expect(find.text('Bună ziua!'), findsOneWidget);
+      expect(find.text('Hello there!'), findsOneWidget);
     });
 
     testWidgets('send button re-enabled after onDone', (tester) async {
       _stubTokens(mock, ['OK']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       // Stop button should be gone, send button visible
@@ -203,7 +203,7 @@ void main() {
       ).thenAnswer((_) async {});
 
       await tester.pumpWidget(_app(mock));
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
 
       expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
     });
@@ -216,14 +216,14 @@ void main() {
   group('Sources', () {
     testWidgets('source chip appears when onSources is called', (tester) async {
       _stubSources(mock, [
-        {'title': 'Carduri de debit', 'source': 'carduri/carduri-de-debit'},
+        {'title': 'Getting Started', 'source': 'docs/getting-started'},
       ]);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Ce carduri?');
+      await _sendMessage(tester, 'What features?');
       await tester.pumpAndSettle();
 
-      expect(find.text('Carduri de debit'), findsOneWidget);
+      expect(find.text('Getting Started'), findsOneWidget);
     });
   });
 
@@ -236,18 +236,18 @@ void main() {
       _stubError(mock, 'Could not connect to server', isConnectionError: true);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       final tf = tester.widget<TextField>(find.byType(TextField));
-      expect(tf.controller?.text, 'Salut');
+      expect(tf.controller?.text, 'Hello');
     });
 
     testWidgets('connection error shows snackbar', (tester) async {
       _stubError(mock, 'Could not connect to server', isConnectionError: true);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       expect(find.byType(SnackBar), findsOneWidget);
@@ -257,7 +257,7 @@ void main() {
       _stubError(mock, 'Could not connect to server', isConnectionError: true);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       // Empty state should be visible again
@@ -268,7 +268,7 @@ void main() {
       _stubError(mock, 'Something went wrong', isConnectionError: false);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       expect(find.textContaining('⚠'), findsOneWidget);
@@ -281,14 +281,14 @@ void main() {
 
   group('Suggested chips', () {
     testWidgets('tapping a chip sends that message', (tester) async {
-      _stubTokens(mock, ['Here are our account options.']);
+      _stubTokens(mock, ['Here are the main features.']);
       await tester.pumpWidget(_app(mock));
 
       // Tap the first suggested chip
-      await tester.tap(find.text('What types of accounts are available?'));
+      await tester.tap(find.text('What features are included in the Pro plan?'));
       await tester.pumpAndSettle();
 
-      expect(find.text('What types of accounts are available?'), findsOneWidget);
+      expect(find.text('What features are included in the Pro plan?'), findsOneWidget);
       verify(
         () => mock.sendMessages(
           messages: any(named: 'messages'),
@@ -309,8 +309,8 @@ void main() {
 
       expect(find.text('Häufige Fragen'), findsOneWidget);
       expect(find.text('Preisliste anzeigen'), findsOneWidget);
-      // Default banking strings should NOT appear
-      expect(find.text('What types of accounts are available?'), findsNothing);
+      // Default suggestion strings should NOT appear
+      expect(find.text('What features are included in the Pro plan?'), findsNothing);
     });
 
     testWidgets('tapping a custom chip sends that text', (tester) async {
@@ -335,7 +335,7 @@ void main() {
       _stubTokens(mock, ['OK']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.delete_outline));
@@ -348,7 +348,7 @@ void main() {
       _stubTokens(mock, ['OK']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.delete_outline));
@@ -363,7 +363,7 @@ void main() {
       _stubTokens(mock, ['OK']);
       await tester.pumpWidget(_app(mock));
 
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.delete_outline));
@@ -371,7 +371,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Salut'), findsOneWidget);
+      expect(find.text('Hello'), findsOneWidget);
     });
 
     testWidgets('clear button disabled when no messages', (tester) async {
@@ -401,7 +401,7 @@ void main() {
       ).thenAnswer((_) async {});
 
       await tester.pumpWidget(_app(mock));
-      await _sendMessage(tester, 'Salut');
+      await _sendMessage(tester, 'Hello');
 
       await tester.tap(find.byIcon(Icons.stop_rounded));
       await tester.pump();

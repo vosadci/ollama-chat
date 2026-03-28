@@ -26,7 +26,7 @@ def _get_excluded_dirs() -> frozenset[str]:
 # HTML parsing
 # ---------------------------------------------------------------------------
 
-class _BankHTMLExtractor(HTMLParser):
+class _HTMLExtractor(HTMLParser):
     _SKIP_TAGS = frozenset(["script", "style", "svg", "noscript"])
     _STRUCTURAL_SKIP = frozenset(["nav", "header", "footer"])
     _BLOCK_TAGS = frozenset([
@@ -93,7 +93,7 @@ def extract_html_text(path: Path) -> tuple[str, str]:
     """Parse an HTML file and return (title, clean_text). Returns ('', '') on error."""
     try:
         html = path.read_text(encoding="utf-8", errors="ignore")
-        parser = _BankHTMLExtractor()
+        parser = _HTMLExtractor()
         parser.feed(html)
         return parser.title, parser.get_text()
     except Exception as exc:

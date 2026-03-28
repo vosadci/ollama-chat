@@ -97,11 +97,11 @@ void main() {
         content: 'Answer',
         timestamp: ts,
         sources: [
-          {'title': 'Credite de consum', 'source': 'credite.html'},
+          {'title': 'Getting Started', 'source': 'getting-started.html'},
         ],
       );
       await tester.pumpWidget(_wrap(msg));
-      expect(find.text('Credite de consum'), findsOneWidget);
+      expect(find.text('Getting Started'), findsOneWidget);
       // SOURCE_BASE_URL is empty in tests, so chips show as plain labels
       expect(find.byIcon(Icons.article_outlined), findsOneWidget);
     });
@@ -113,13 +113,13 @@ void main() {
         content: 'Answer',
         timestamp: ts,
         sources: [
-          {'title': 'Credite', 'source': 'credite.html'},
-          {'title': 'Carduri', 'source': 'carduri.html'},
+          {'title': 'Pricing', 'source': 'pricing.html'},
+          {'title': 'Features', 'source': 'features.html'},
         ],
       );
       await tester.pumpWidget(_wrap(msg));
-      expect(find.text('Credite'), findsOneWidget);
-      expect(find.text('Carduri'), findsOneWidget);
+      expect(find.text('Pricing'), findsOneWidget);
+      expect(find.text('Features'), findsOneWidget);
     });
 
     testWidgets('does not show source chips for user messages', (tester) async {

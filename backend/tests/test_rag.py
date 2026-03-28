@@ -12,7 +12,7 @@ import pytest
 
 from services.rag import (
     RAGService,
-    _BankHTMLExtractor,
+    _HTMLExtractor,
     _mmr_rerank,
     _rrf,
     chunk_text,
@@ -25,18 +25,18 @@ from services.rag import (
 # HTML extraction
 # ---------------------------------------------------------------------------
 
-class TestBankHTMLExtractor:
+class TestHTMLExtractor:
     def _extract(self, html: str) -> tuple[str, str]:
-        parser = _BankHTMLExtractor()
+        parser = _HTMLExtractor()
         parser.feed(html)
         return parser.title, parser.get_text()
 
     def test_extracts_title(self):
-        _, text = self._extract("<html><head><title>Credite</title></head><body><p>Info</p></body></html>")
+        _, text = self._extract("<html><head><title>Pricing</title></head><body><p>Info</p></body></html>")
         # title is captured separately
-        parser = _BankHTMLExtractor()
-        parser.feed("<html><head><title>Credite</title></head><body><p>Info</p></body></html>")
-        assert parser.title == "Credite"
+        parser = _HTMLExtractor()
+        parser.feed("<html><head><title>Pricing</title></head><body><p>Info</p></body></html>")
+        assert parser.title == "Pricing"
 
     def test_extracts_paragraph_text(self):
         _, text = self._extract("<html><body><p>Hello world</p></body></html>")
@@ -135,8 +135,8 @@ class TestChunkText:
 
     def test_source_preserved_in_all_chunks(self):
         text = " ".join(["word"] * 500)
-        chunks = chunk_text(text, "credite/page.html", "Title", 100, 10)
-        assert all(c["source"] == "credite/page.html" for c in chunks)
+        chunks = chunk_text(text, "docs/page.html", "Title", 100, 10)
+        assert all(c["source"] == "docs/page.html" for c in chunks)
 
     def test_no_chunks_for_empty_text(self):
         chunks = chunk_text("", "test.html", "Title", 800, 80)
@@ -188,12 +188,12 @@ class TestMMRRerank:
 
     def test_returns_exactly_top_k(self):
         candidates = self._make_candidates([
-            ("credit loan bank", "A", 0.9),
-            ("debit card payment", "B", 0.8),
-            ("savings deposit", "C", 0.7),
-            ("investment fund", "D", 0.6),
+            ("project management software tool", "A", 0.9),
+            ("task tracking kanban board", "B", 0.8),
+            ("pricing plans enterprise", "C", 0.7),
+            ("mobile app integration", "D", 0.6),
         ])
-        result = _mmr_rerank(candidates, {"credit"}, top_k=2, lam=0.7)
+        result = _mmr_rerank(candidates, {"project"}, top_k=2, lam=0.7)
         assert len(result) == 2
 
     def test_returns_fewer_when_candidates_insufficient(self):
@@ -205,11 +205,11 @@ class TestMMRRerank:
         # A and B are near-identical; C is diverse.
         # With lambda=0.7, after picking A, C should beat B.
         candidates = self._make_candidates([
-            ("credit loan interest rate mortgage bank", "A", 0.9),
-            ("credit loan interest rate mortgage bank", "B", 0.85),
-            ("savings deposit term account yield", "C", 0.5),
+            ("project management task tracking workflow automation", "A", 0.9),
+            ("project management task tracking workflow automation", "B", 0.85),
+            ("pricing plans enterprise free tier features", "C", 0.5),
         ])
-        result = _mmr_rerank(candidates, {"credit"}, top_k=2, lam=0.7)
+        result = _mmr_rerank(candidates, {"project"}, top_k=2, lam=0.7)
         titles = [m["title"] for _, m in result]
         assert "A" in titles
         assert "C" in titles
@@ -252,9 +252,9 @@ class TestGetHtmlFiles:
         assert get_html_files(tmp_path) == []
 
     def test_includes_non_excluded_directories(self, tmp_path):
-        credite = tmp_path / "credite"
-        credite.mkdir()
-        (credite / "page.html").write_text("<html></html>")
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "page.html").write_text("<html></html>")
         files = get_html_files(tmp_path)
         assert len(files) == 1
 
@@ -264,7 +264,7 @@ class TestGetHtmlFiles:
         assert get_html_files(tmp_path) == []
 
     def test_finds_nested_html_files(self, tmp_path):
-        sub = tmp_path / "credite" / "consum"
+        sub = tmp_path / "docs" / "guide"
         sub.mkdir(parents=True)
         (sub / "page.html").write_text("<html></html>")
         files = get_html_files(tmp_path)
@@ -295,7 +295,7 @@ class TestRAGServiceRetrieveFailureModes:
         rag._get_collection = Mock(return_value=mock_col)
         rag._embedder.embed = Mock(side_effect=RuntimeError("Ollama embed endpoint down"))
 
-        result = await rag.retrieve("carduri de debit")
+        result = await rag.retrieve("getting started guide")
 
         assert result == ([], [])
 
@@ -303,7 +303,7 @@ class TestRAGServiceRetrieveFailureModes:
         """When _get_collection raises (ChromaDB not running), returns ([], [])."""
         rag._get_collection = Mock(side_effect=RuntimeError("ChromaDB not reachable"))
 
-        result = await rag.retrieve("credite")
+        result = await rag.retrieve("pricing plans")
 
         assert result == ([], [])
 
@@ -315,6 +315,6 @@ class TestRAGServiceRetrieveFailureModes:
         rag._embedder.embed = Mock(return_value=[[0.1] * 10])
         # BM25 index not ready by default → BM25 leg is skipped
 
-        result = await rag.retrieve("orice întrebare")
+        result = await rag.retrieve("any question")
 
         assert result == ([], [])

@@ -19,10 +19,10 @@ void main() {
   group('ChatScreen — empty state', () {
     testWidgets('shows suggested question chips', (tester) async {
       await tester.pumpWidget(const MaterialApp(home: ChatScreen()));
-      expect(find.text('What types of accounts are available?'), findsOneWidget);
-      expect(find.text('Tell me about card options.'), findsOneWidget);
-      expect(find.text('What loan products are offered?'), findsOneWidget);
-      expect(find.text('How do I open an account?'), findsOneWidget);
+      expect(find.text('What features are included in the Pro plan?'), findsOneWidget);
+      expect(find.text('How do I get started?'), findsOneWidget);
+      expect(find.text('What integrations are supported?'), findsOneWidget);
+      expect(find.text('How is my data kept secure?'), findsOneWidget);
     });
 
     testWidgets('shows chat bubble icon', (tester) async {
