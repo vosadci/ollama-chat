@@ -19,7 +19,11 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s",
 )
-logging.getLogger().addFilter(RequestIDFilter())
+# Attach the filter to the root *handler* so it runs for all records that
+# reach the handler — including those propagated from third-party loggers
+# (e.g. watchfiles) which bypass the root logger's own filter list.
+for _h in logging.root.handlers:
+    _h.addFilter(RequestIDFilter())
 logger = logging.getLogger(__name__)
 
 
