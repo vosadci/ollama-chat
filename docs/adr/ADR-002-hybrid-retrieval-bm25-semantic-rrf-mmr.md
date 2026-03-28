@@ -10,7 +10,7 @@
 
 A RAG pipeline needs a retrieval strategy that surfaces the most relevant chunks from the indexed corpus for a given user query.  Pure dense (embedding-based) retrieval is strong on semantic similarity but misses exact-term matches.  Pure BM25 is good at keyword recall but cannot understand paraphrase or conceptual similarity.
 
-Domain-specific corpora (bank websites, product catalogues, error-code documentation) contain many proper nouns, product codes, and exact strings that dense retrieval often ranks poorly.
+Domain-specific corpora (SaaS documentation, product catalogues, error-code documentation) contain many proper nouns, product codes, and exact strings that dense retrieval often ranks poorly.
 
 Retrieval quality also benefits from diversity: if the top-k chunks are near-duplicates of the same paragraph the model sees little additional information.
 
