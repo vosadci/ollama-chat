@@ -10,15 +10,15 @@ This keeps tests fast and fully offline.
 
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
 from httpx import ASGITransport
 
-from tests.sse_helpers import parse_sse
 from dependencies import get_rag_service
 from main import app
 from services.rag import RAGService
+from tests.sse_helpers import parse_sse
 
 
 async def _fake_stream(*_args, **_kwargs):

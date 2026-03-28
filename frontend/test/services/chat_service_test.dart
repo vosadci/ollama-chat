@@ -205,7 +205,6 @@ void main() {
 
       // The timeout branch is triggered by a TimeoutException from send().
       // We verify that by checking the onError path resolves without throwing.
-      var connectionError = false;
       try {
         await service.sendMessages(
           messages: [
@@ -214,10 +213,7 @@ void main() {
           onToken: (_) {},
           onSources: (_) {},
           onDone: () {},
-          onError: (err, {bool isConnectionError = false}) {
-            errors.add(err);
-            connectionError = isConnectionError;
-          },
+          onError: (err, {bool isConnectionError = false}) => errors.add(err),
         );
       } catch (_) {}
 

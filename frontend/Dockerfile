@@ -5,7 +5,7 @@
 # Pin to an exact version for reproducible builds. To update:
 #   1. Check latest stable: https://docs.flutter.dev/release/release-notes
 #   2. Update the tag below and the flutter-version in .github/workflows/ci.yml
-FROM ghcr.io/cirruslabs/flutter:3.29.3 AS builder
+FROM ghcr.io/cirruslabs/flutter:3.41.6 AS builder
 
 ENV FLUTTER_ALLOW_SUPERUSER=1
 

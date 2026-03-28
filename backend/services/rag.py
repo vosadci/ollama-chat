@@ -176,7 +176,7 @@ def _mmr_rerank(
     while len(selected) < top_k and remaining:
         best_idx = 0
         best_score = float("-inf")
-        for i, (text, meta, rrf_score) in enumerate(remaining):
+        for i, (text, _meta, rrf_score) in enumerate(remaining):
             tokens = set(text.lower().split())
             relevance = _jaccard(tokens, query_tokens) * 0.3 + rrf_score * 0.7
             if selected:
@@ -455,8 +455,8 @@ class RAGService:
             fused_ids = _rrf([sem_ids, bm25_ids]) if bm25_ids else sem_ids
 
             # Build a lookup from what we already have (semantic results)
-            id_to_doc = dict(zip(sem_ids, sem_docs))
-            id_to_meta = dict(zip(sem_ids, sem_meta))
+            id_to_doc = dict(zip(sem_ids, sem_docs, strict=True))
+            id_to_meta = dict(zip(sem_ids, sem_meta, strict=True))
 
             # Fetch any BM25-only IDs not already in semantic results
             missing = [i for i in fused_ids[:settings.rag_top_k * 2] if i not in id_to_doc]
@@ -466,7 +466,7 @@ class RAGService:
                     ids=missing,
                     include=["documents", "metadatas"],
                 )
-                for doc_id, doc, meta in zip(extra["ids"], extra["documents"], extra["metadatas"]):
+                for doc_id, doc, meta in zip(extra["ids"], extra["documents"], extra["metadatas"], strict=True):
                     id_to_doc[doc_id] = doc
                     id_to_meta[doc_id] = meta
 

@@ -11,9 +11,9 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict, deque
-from typing import Callable
+from collections.abc import Callable
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 
 # ---------------------------------------------------------------------------
 # Configuration

@@ -5,13 +5,11 @@ Tests run entirely offline — no server, no external services.
 import asyncio
 import time
 
-import pytest
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from middleware.rate_limit import rate_limit, _COUNTS
-
+from middleware.rate_limit import _COUNTS, rate_limit
 
 # ---------------------------------------------------------------------------
 # Minimal app for isolation
@@ -88,8 +86,9 @@ class TestRateLimitDependency:
 
     def test_old_timestamps_expire(self):
         """Requests older than the window should not count."""
-        from middleware.rate_limit import _COUNTS
         from collections import deque
+
+        from middleware.rate_limit import _COUNTS
 
         ip = "10.0.0.7"
         # Plant 3 old timestamps (well outside the window)

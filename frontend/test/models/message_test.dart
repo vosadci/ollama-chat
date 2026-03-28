@@ -39,8 +39,8 @@ void main() {
         content: '',
         timestamp: timestamp,
       );
-      final msg2 = msg.copyWith(content: msg.content + 'token1');
-      final msg3 = msg2.copyWith(content: msg2.content + 'token2');
+      final msg2 = msg.copyWith(content: '${msg.content}token1');
+      final msg3 = msg2.copyWith(content: '${msg2.content}token2');
       expect(msg3.content, 'token1token2');
       // Original is unchanged
       expect(msg.content, '');

@@ -12,6 +12,7 @@
 ///
 /// A native desktop window opens; you can watch the app as tests drive it.
 /// (Web targets are not supported by the integration_test package.)
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -60,10 +61,10 @@ void main() {
 
       expect(find.byKey(const Key('emptyState')), findsOneWidget);
       expect(find.text('Start a conversation'), findsOneWidget);
-      expect(find.text('What types of accounts are available?'), findsOneWidget);
-      expect(find.text('Tell me about card options.'), findsOneWidget);
-      expect(find.text('What loan products are offered?'), findsOneWidget);
-      expect(find.text('How do I open an account?'), findsOneWidget);
+      expect(find.text('What features are included in the Pro plan?'), findsOneWidget);
+      expect(find.text('How do I get started?'), findsOneWidget);
+      expect(find.text('What integrations are supported?'), findsOneWidget);
+      expect(find.text('How is my data kept secure?'), findsOneWidget);
     });
 
     // -----------------------------------------------------------------------
@@ -100,7 +101,7 @@ void main() {
     testWidgets('typing indicator visible during streaming', (tester) async {
       await launch(tester);
 
-      await sendMessage(tester, 'Salut');
+      await sendMessage(tester, 'Hello');
 
       // Pump a few frames — streaming started, indicator should appear
       await tester.pump(const Duration(milliseconds: 200));
@@ -118,7 +119,7 @@ void main() {
     testWidgets('source chips appear after RAG-relevant question', (tester) async {
       await launch(tester);
 
-      await sendMessage(tester, 'What card options are available?');
+      await sendMessage(tester, 'What features are in the Pro plan?');
       await waitForResponse(tester);
 
       // At least one source chip (open_in_new icon) should be present
@@ -132,7 +133,7 @@ void main() {
     testWidgets('tapping suggested chip sends message', (tester) async {
       await launch(tester);
 
-      const chipText = 'What types of accounts are available?';
+      const chipText = 'What features are included in the Pro plan?';
       await tester.tap(find.text(chipText));
       await tester.pump();
 
@@ -175,15 +176,15 @@ void main() {
     testWidgets('multi-turn conversation keeps all messages', (tester) async {
       await launch(tester);
 
-      await sendMessage(tester, 'What types of accounts are available?');
+      await sendMessage(tester, 'What features are included in the Pro plan?');
       await waitForResponse(tester);
 
-      await sendMessage(tester, 'Tell me about card options.');
+      await sendMessage(tester, 'How do I get started?');
       await waitForResponse(tester);
 
       // Both user messages should be visible
-      expect(find.text('What types of accounts are available?'), findsOneWidget);
-      expect(find.text('Tell me about card options.'), findsOneWidget);
+      expect(find.text('What features are included in the Pro plan?'), findsOneWidget);
+      expect(find.text('How do I get started?'), findsOneWidget);
 
       // Two assistant bubbles (MarkdownBody widgets)
       expect(find.byType(MarkdownBody), findsNWidgets(2));

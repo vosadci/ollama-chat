@@ -15,16 +15,14 @@ The suite spins up the full FastAPI lifespan (RAG index build + Ollama checks)
 via ``httpx.AsyncClient`` with ASGI transport — no TCP port needed.
 """
 
-import os
 
 import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport
 
-from tests.sse_helpers import parse_sse
 from main import app
-
+from tests.sse_helpers import parse_sse
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -37,14 +35,15 @@ async def live_client():
     Uses ``scope="module"`` so the index is built only once per module run.
     """
     transport = ASGITransport(app=app)
-    async with httpx.AsyncClient(
-        transport=transport,
-        base_url="http://test",
-        timeout=120.0,  # index build can be slow on first run
-    ) as c:
-        # Trigger the lifespan manually
-        async with app.router.lifespan_context(app):
-            yield c
+    async with (
+        httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            timeout=120.0,  # index build can be slow on first run
+        ) as c,
+        app.router.lifespan_context(app),
+    ):
+        yield c
 
 
 # ---------------------------------------------------------------------------

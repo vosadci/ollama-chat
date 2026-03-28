@@ -1,17 +1,18 @@
 import asyncio
 import logging
 import os
-import uvicorn
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from middleware.request_id import RequestIDFilter, RequestIDMiddleware
-from routers.chat import router as chat_router, MAX_MESSAGE_LENGTH
+from routers.chat import MAX_MESSAGE_LENGTH
+from routers.chat import router as chat_router
 from services.rag import RAGService
 
 logging.basicConfig(

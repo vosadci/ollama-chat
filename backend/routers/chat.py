@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import AsyncIterator, Literal
+from collections.abc import AsyncIterator
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends

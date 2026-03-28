@@ -4,8 +4,6 @@ All tests here are fully offline — no Ollama, no ChromaDB, no filesystem I/O
 beyond what is explicitly set up in each test.
 """
 
-import tempfile
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -19,7 +17,6 @@ from services.rag import (
     extract_html_text,
     get_html_files,
 )
-
 
 # ---------------------------------------------------------------------------
 # HTML extraction
