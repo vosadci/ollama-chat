@@ -4,8 +4,8 @@ services:
       context: ./backend
     env_file: .env
     volumes:
-      - ./backend/data:/app/data:ro
-      - ./backend/chroma_db:/app/chroma_db
+      - ./backend/data:/home/app/data:ro
+      - ./backend/chroma_db:/home/app/chroma_db
     ports:
       - "8000:8000"
     healthcheck:
